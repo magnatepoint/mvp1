@@ -1,0 +1,93 @@
+{
+  "project_name": "monytix-mvp",
+  "description": "AI-assisted implementation of the Monytix MVP (SpendSense, Goals, BudgetPilot, GoalCompass, MoneyMoments, Realtime Ingestion).",
+  "tech_stack": {
+    "backend": "FastAPI",
+    "frontend": "React PWA",
+    "databases": [
+      "PostgreSQL",
+      "MongoDB"
+    ],
+    "queue": "Celery + Redis",
+    "auth": "Supabase Auth"
+  },
+  "sources_of_truth": {
+    "frs_modules": [
+      "01_introduction_architecture.md",
+      "02_spendsense.md",
+      "03_goals.md",
+      "04_budgetpilot.md",
+      "05_goalcompass.md",
+      "06_moneymoments.md",
+      "07_realtime_ingestion.md",
+      "08_data_dictionary.md",
+      "09_api_reference.md",
+      "10_acceptance_criteria.md"
+    ],
+    "rules_file": "augment_rules.md"
+  },
+  "agents": [
+    {
+      "name": "backend-architect",
+      "role": "Design FastAPI services and data models according to FRS and augment_rules.md.",
+      "focus_modules": [
+        "02_spendsense",
+        "04_budgetpilot",
+        "05_goalcompass",
+        "07_realtime_ingestion"
+      ],
+      "constraints": [
+        "Never bypass hash-based dedupe.",
+        "Never mutate canonical txn_fact.",
+        "Use UPSERT for updates."
+      ]
+    },
+    {
+      "name": "frontend-pwa-dev",
+      "role": "Implement React PWA screens and API calls matching backend contracts.",
+      "focus_modules": [
+        "01_introduction_architecture",
+        "02_spendsense",
+        "03_goals",
+        "04_budgetpilot",
+        "05_goalcompass",
+        "06_moneymoments"
+      ],
+      "constraints": [
+        "Use SSE endpoint for realtime updates.",
+        "Respect mobile-first layout.",
+        "Never store secrets in frontend code."
+      ]
+    },
+    {
+      "name": "etl-pipeline-engineer",
+      "role": "Own CSV/email ingestion, normalization, categorization, and KPI jobs.",
+      "focus_modules": [
+        "02_spendsense",
+        "07_realtime_ingestion",
+        "08_data_dictionary"
+      ],
+      "constraints": [
+        "Pipelines must be idempotent and replay-safe.",
+        "Parser errors must not break the pipeline."
+      ]
+    },
+    {
+      "name": "qa-tester",
+      "role": "Create and maintain tests matching Module 10 acceptance criteria.",
+      "focus_modules": [
+        "10_acceptance_criteria"
+      ],
+      "constraints": [
+        "Always validate idempotency and dedupe.",
+        "Cover golden path + edge cases."
+      ]
+    }
+  ],
+  "global_constraints": [
+    "Follow augment_rules.md at all times.",
+    "Respect module boundaries and responsibilities.",
+    "Prefer small, reviewable PRs grouped by epic/task.",
+    "All money values must be treated as NUMERIC(14,2) and not floats in business logic."
+  ]
+}

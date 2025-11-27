@@ -1,0 +1,23 @@
+# General
+.DS_Store
+.env
+*.log
+
+# Python
+**/__pycache__/
+**/*.pyc
+backend/.venv/
+backend/.env
+backend/gmail-pubsub-key.json
+
+# Node / Next / React
+**/node_modules/
+**/.next/
+**/.turbo/
+**/dist/
+**/build/
+monyweb/.env
+
+# Misc
+*.sqlite3
+*.db
