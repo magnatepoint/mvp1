@@ -26,7 +26,11 @@ celery_app.conf.update(
         },
         "apply-merchant-feedback": {
             "task": "spendsense.ml.apply_merchant_feedback",
-            "schedule": 1800.0,
+            "schedule": 1800.0,  # Run every 30 minutes
+        },
+        "train-category-model": {
+            "task": "spendsense.ml.train_category_model",
+            "schedule": 86400.0,  # Run daily to train category prediction model
         },
     },
 )

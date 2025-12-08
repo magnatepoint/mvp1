@@ -2,6 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import './SpendSensePanel.css'
 import { env } from '../../env'
+import { SkeletonLoader, SkeletonTable } from '../../components/SkeletonLoader'
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
+import { AIInsights } from '../../components/AIInsights'
+import { BudgetTracker } from '../../components/BudgetTracker'
+import { ExportButton } from '../../components/ExportButton'
+import { SpendingPredictions } from '../../components/SpendingPredictions'
+import { useToast } from '../../components/Toast'
+import { ChevronDown, ChevronUp, Search, X as XIcon } from 'lucide-react'
 
 type Category = {
   code: string
@@ -180,6 +188,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [subcategories, setSubcategories] = useState<Subcategory[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('')
@@ -386,8 +395,17 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
 
     return (
     <>
-      <tr>
-        <td>{new Date(transaction.txn_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
+      <tr className={expanded ? 'spendsense__row--expanded' : ''}>
+        <td>
+          <button
+            className="spendsense__expandButton"
+            onClick={() => setExpanded(!expanded)}
+            aria-label={expanded ? 'Collapse details' : 'Expand details'}
+          >
+            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {new Date(transaction.txn_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+        </td>
           <td>
             <div className="spendsense__merchant">
               <div className="spendsense__merchantName">{transaction.merchant ?? '—'}</div>
@@ -428,6 +446,53 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
           </div>
         </td>
       </tr>
+      {expanded && (
+        <tr className="spendsense__rowDetails">
+          <td colSpan={6}>
+            <div className="spendsense__detailsContent">
+              <div className="spendsense__detailsGrid">
+                <div className="spendsense__detailsItem">
+                  <span className="spendsense__detailsLabel">Transaction ID</span>
+                  <span className="spendsense__detailsValue">{transaction.txn_id}</span>
+                </div>
+                <div className="spendsense__detailsItem">
+                  <span className="spendsense__detailsLabel">Date & Time</span>
+                  <span className="spendsense__detailsValue">
+                    {new Date(transaction.txn_date).toLocaleString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+                <div className="spendsense__detailsItem">
+                  <span className="spendsense__detailsLabel">Direction</span>
+                  <span className={`spendsense__detailsValue ${transaction.direction === 'credit' ? 'amount-credit' : 'amount-debit'}`}>
+                    {transaction.direction === 'credit' ? 'Credit (Incoming)' : 'Debit (Outgoing)'}
+                  </span>
+                </div>
+                <div className="spendsense__detailsItem">
+                  <span className="spendsense__detailsLabel">Bank</span>
+                  <span className="spendsense__detailsValue">{bankInfo?.name || transaction.bank_code || '—'}</span>
+                </div>
+                <div className="spendsense__detailsItem">
+                  <span className="spendsense__detailsLabel">Channel</span>
+                  <span className="spendsense__detailsValue">{channelInfo?.label || transaction.channel || '—'}</span>
+                </div>
+                <div className="spendsense__detailsItem">
+                  <span className="spendsense__detailsLabel">Amount</span>
+                  <span className={`spendsense__detailsValue ${transaction.direction === 'credit' ? 'amount-credit' : 'amount-debit'}`}>
+                    {transaction.direction === 'credit' ? '+' : '-'}
+                    {currencyFormatter.format(Math.abs(transaction.amount))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
       {showDeleteConfirm && (
         <tr>
           <td colSpan={6} className="spendsense__deleteConfirm">
@@ -451,6 +516,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
 }
 
 export function SpendSensePanel({ session }: Props) {
+  const { showToast } = useToast()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
@@ -474,7 +540,7 @@ export function SpendSensePanel({ session }: Props) {
   const [kpiLoading, setKpiLoading] = useState(true)
   const [kpiError, setKpiError] = useState<string | null>(null)
   const [lootFlip, setLootFlip] = useState(false)
-  const [activeTab, setActiveTab] = useState<'kpis' | 'transactions'>('kpis')
+  const [activeTab, setActiveTab] = useState<'kpis' | 'insights' | 'transactions'>('kpis')
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
@@ -609,9 +675,11 @@ export function SpendSensePanel({ session }: Props) {
       fetchTransactions(1)
       fetchKpis()
       setPdfPassword('')
+      showToast('Statement uploaded successfully!', 'success')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setUploadError(message)
+      showToast(`Upload failed: ${message}`, 'error')
       if (message.toLowerCase().includes('password')) {
         passwordInputRef.current?.focus()
       }
@@ -729,7 +797,14 @@ export function SpendSensePanel({ session }: Props) {
           onClick={() => setActiveTab('kpis')}
           type="button"
         >
-          KPIs & Insights
+          Dashboard
+        </button>
+        <button
+          className={`spendsense__tab ${activeTab === 'insights' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('insights')}
+          type="button"
+        >
+          AI Insights
         </button>
         <button
           className={`spendsense__tab ${activeTab === 'transactions' ? 'is-active' : ''}`}
@@ -742,9 +817,80 @@ export function SpendSensePanel({ session }: Props) {
 
       {activeTab === 'kpis' && (
         <>
+          {/* Overview Cards */}
+          <div className="spendsense__overview">
+            {kpiLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonLoader key={i} height={140} width="100%" />
+              ))
+            ) : kpiError ? (
+              <p className="error-message">{kpiError}</p>
+            ) : (
+              <>
+                <div className="spendsense__overviewCard spendsense__overviewCard--income">
+                  <div className="spendsense__overviewCardHeader">
+                    <span className="spendsense__overviewCardLabel">Total Income</span>
+                    <div className="spendsense__overviewCardIcon">💰</div>
+                  </div>
+                  <div className="spendsense__overviewCardValue">
+                    {currencyFormatter.format(kpis?.income_amount ?? 0)}
+                  </div>
+                  <div className="spendsense__overviewCardSubtitle">
+                    {kpis?.month ? formatMonthLabel(kpis.month) : 'This month'}
+                  </div>
+                </div>
+                
+                <div className="spendsense__overviewCard spendsense__overviewCard--expenses">
+                  <div className="spendsense__overviewCardHeader">
+                    <span className="spendsense__overviewCardLabel">Total Expenses</span>
+                    <div className="spendsense__overviewCardIcon">💸</div>
+                  </div>
+                  <div className="spendsense__overviewCardValue">
+                    {currencyFormatter.format((kpis?.needs_amount ?? 0) + (kpis?.wants_amount ?? 0))}
+                  </div>
+                  <div className="spendsense__overviewCardSubtitle">
+                    Needs + Wants
+                  </div>
+                </div>
+                
+                <div className="spendsense__overviewCard spendsense__overviewCard--savings">
+                  <div className="spendsense__overviewCardHeader">
+                    <span className="spendsense__overviewCardLabel">Net Savings</span>
+                    <div className="spendsense__overviewCardIcon">💎</div>
+                  </div>
+                  <div className="spendsense__overviewCardValue">
+                    {currencyFormatter.format(
+                      (kpis?.income_amount ?? 0) - 
+                      ((kpis?.needs_amount ?? 0) + (kpis?.wants_amount ?? 0))
+                    )}
+                  </div>
+                  <div className="spendsense__overviewCardSubtitle">
+                    Income - Expenses
+                  </div>
+                </div>
+                
+                <div className="spendsense__overviewCard spendsense__overviewCard--assets">
+                  <div className="spendsense__overviewCardHeader">
+                    <span className="spendsense__overviewCardLabel">Assets</span>
+                    <div className="spendsense__overviewCardIcon">📈</div>
+                  </div>
+                  <div className="spendsense__overviewCardValue">
+                    {currencyFormatter.format(kpis?.assets_amount ?? 0)}
+                  </div>
+                  <div className="spendsense__overviewCardSubtitle">
+                    Investments & Commitments
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          
+          {/* Legacy KPI Cards */}
           <div className="spendsense__pipeline">
             {kpiLoading ? (
-              <p className="status-loading">Loading KPI…</p>
+              Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonLoader key={i} height={120} width="100%" />
+              ))
             ) : kpiError ? (
               <p className="error-message">{kpiError}</p>
             ) : (
@@ -762,6 +908,72 @@ export function SpendSensePanel({ session }: Props) {
               ))
             )}
           </div>
+          {!kpiLoading && !kpiError && kpis?.top_categories && kpis.top_categories.length > 0 && (
+            <div className="spendsense__chartsSection">
+              <div className="spendsense__chartCard">
+                <h4 className="spendsense__chartTitle">Category Breakdown</h4>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={kpis.top_categories.slice(0, 8).map((cat) => ({
+                        name: cat.category_name || cat.category_code,
+                        value: cat.spend_amount,
+                      }))}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {kpis.top_categories.slice(0, 8).map((_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={['#f7c873', '#34f5c5', '#818cf8', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899'][index % 8]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number) => currencyFormatter.format(value)}
+                      contentStyle={{
+                        backgroundColor: 'rgba(8, 12, 20, 0.95)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '8px',
+                        color: '#f9fbff',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="spendsense__chartCard">
+                <h4 className="spendsense__chartTitle">Top Categories</h4>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={kpis.top_categories.slice(0, 6).map((cat) => ({
+                      name: (cat.category_name || cat.category_code).substring(0, 12),
+                      amount: cat.spend_amount,
+                      change: cat.change_pct || 0,
+                    }))}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <XAxis dataKey="name" tick={{ fill: '#93a4c2', fontSize: 12 }} />
+                    <YAxis tick={{ fill: '#93a4c2', fontSize: 12 }} />
+                    <Tooltip
+                      formatter={(value: number) => currencyFormatter.format(value)}
+                      contentStyle={{
+                        backgroundColor: 'rgba(8, 12, 20, 0.95)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '8px',
+                        color: '#f9fbff',
+                      }}
+                    />
+                    <Bar dataKey="amount" fill="#34f5c5" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
           {!kpiLoading && !kpiError && (
             <div className="spendsense__gamifiedRow">
               <article className={`spendsense__gaugeCard ${gaugeClass}`}>
@@ -878,6 +1090,16 @@ export function SpendSensePanel({ session }: Props) {
         </>
       )}
 
+      {activeTab === 'insights' && (
+        <div className="spendsense__insightsTab">
+          <div className="spendsense__insightsGrid">
+            <AIInsights loading={kpiLoading} />
+            <SpendingPredictions loading={kpiLoading} />
+            <BudgetTracker loading={kpiLoading} />
+          </div>
+        </div>
+      )}
+      
       {activeTab === 'transactions' && (
       <div className="spendsense__transactions">
         <header className="spendsense__transactionsHeader">
@@ -885,21 +1107,51 @@ export function SpendSensePanel({ session }: Props) {
             <p className="eyebrow">Transactions</p>
             <h3>Latest categorized activity</h3>
           </div>
-          <button className="ghost-button" onClick={() => setFilterPanelOpen((prev) => !prev)}>
-            {filterPanelOpen ? 'Hide Filters' : 'Filter'}
-          </button>
+          <div className="spendsense__transactionsActions">
+            <ExportButton
+              data={transactions.map((t) => ({
+                date: t.txn_date,
+                merchant: t.merchant,
+                category: t.category,
+                subcategory: t.subcategory,
+                amount: t.amount,
+                direction: t.direction,
+                channel: t.channel,
+                bank: t.bank_code,
+              }))}
+              filename="transactions"
+              onExport={(format) => {
+                // Toast will be shown by ExportButton if needed
+              }}
+            />
+            <button className="ghost-button" onClick={() => setFilterPanelOpen((prev) => !prev)}>
+              {filterPanelOpen ? 'Hide Filters' : 'Filter'}
+            </button>
+          </div>
         </header>
         {filterPanelOpen && (
           <div className="spendsense__filters">
             <div className="spendsense__filterGroup">
               <label>Search</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Merchant or description"
-                value={filters.search}
-                onChange={(event) => handleFilterChange({ search: event.target.value })}
-              />
+              <div className="spendsense__searchWrapper">
+                <Search size={18} className="spendsense__searchIcon" />
+                <input
+                  type="text"
+                  className="input-field spendsense__searchInput"
+                  placeholder="Search merchant, category, or description..."
+                  value={filters.search}
+                  onChange={(event) => handleFilterChange({ search: event.target.value })}
+                />
+                {filters.search && (
+                  <button
+                    className="spendsense__searchClear"
+                    onClick={() => handleFilterChange({ search: '' })}
+                    aria-label="Clear search"
+                  >
+                    <XIcon size={16} />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="spendsense__filterGroup">
               <label>Category</label>
@@ -958,36 +1210,84 @@ export function SpendSensePanel({ session }: Props) {
         )}
         {uploadError ? <p className="error-message">{uploadError}</p> : null}
         {loading ? (
-          <p className="status-loading">Loading transactions…</p>
+          <>
+            <SkeletonTable rows={8} columns={6} />
+            <div className="spendsense__transactionCards">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="skeleton-card">
+                  <SkeletonLoader height={20} width="60%" />
+                  <SkeletonLoader height={32} width="100%" className="skeleton-card-spacing" />
+                  <SkeletonLoader height={16} width="80%" variant="text" lines={2} />
+                </div>
+              ))}
+            </div>
+          </>
         ) : error ? (
           <p className="error-message">{error}</p>
         ) : (
-          <table className="spendsense__table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Merchant</th>
-                <th>Category</th>
-                <th>Subcategory</th>
-                <th className="spendsense__amountCol">Amount</th>
-                <th className="spendsense__actionsCol">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <table className="spendsense__table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Merchant</th>
+                  <th>Category</th>
+                  <th>Subcategory</th>
+                  <th className="spendsense__amountCol">Amount</th>
+                  <th className="spendsense__actionsCol">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(transactions || []).map((txn) => (
+                  <TransactionRow
+                    key={txn.txn_id}
+                    transaction={txn}
+                    session={session}
+                    onUpdate={() => fetchTransactions(currentPage)}
+                    onDelete={() => {
+                      setTransactions((prev) => prev.filter((t) => t.txn_id !== txn.txn_id))
+                      setTotalCount((prev) => Math.max(0, prev - 1))
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+            <div className="spendsense__transactionCards">
               {(transactions || []).map((txn) => (
-                <TransactionRow
-                  key={txn.txn_id}
-                  transaction={txn}
-                  session={session}
-                  onUpdate={() => fetchTransactions(currentPage)}
-                  onDelete={() => {
-                    setTransactions((prev) => prev.filter((t) => t.txn_id !== txn.txn_id))
-                    setTotalCount((prev) => Math.max(0, prev - 1))
-                  }}
-                />
+                <div key={txn.txn_id} className="spendsense__transactionCard">
+                  <div className="spendsense__transactionCardHeader">
+                    <div className="spendsense__transactionCardMerchant">
+                      <div className="spendsense__transactionCardMerchantName">
+                        {txn.merchant || '—'}
+                      </div>
+                      <div className="spendsense__transactionCardMeta">
+                        <span className="spendsense__transactionCardDate">
+                          {new Date(txn.txn_date).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                          })}
+                        </span>
+                        {txn.category && (
+                          <span className="spendsense__badge">{formatLabel(txn.category)}</span>
+                        )}
+                        {txn.channel && (
+                          <span className="spendsense__chip">{formatLabel(txn.channel)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      className={`spendsense__transactionCardAmount ${
+                        txn.direction === 'credit' ? 'amount-credit' : 'amount-debit'
+                      }`}
+                    >
+                      {txn.direction === 'credit' ? '+' : '-'}
+                      {currencyFormatter.format(Math.abs(txn.amount))}
+                    </div>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
         {!loading && !error && totalCount > 0 && (
           <div className="spendsense__pagination">

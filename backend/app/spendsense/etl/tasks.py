@@ -7,6 +7,7 @@ import asyncpg
 
 from app.celery_app import celery_app
 from app.core.config import get_settings
+from app.spendsense.services.txn_parsed_populator import populate_txn_parsed_from_fact
 from .parsers import SpendSenseParseError, parse_transactions_file
 from .pipeline import enrich_transactions
 
@@ -146,46 +147,43 @@ async def _ingest(
             alias_match AS (
                 SELECT
                     n.*,
-                    ma_user.normalized_name AS user_alias_name,
-                    ma_user.channel_override AS user_alias_channel,
-                    ma_global.normalized_name AS global_alias_name,
-                    ma_global.channel_override AS global_alias_channel
+                    dm_from_alias.merchant_id AS alias_merchant_id,
+                    dm_from_alias.normalized_name AS alias_merchant_name
                 FROM norm n
-                LEFT JOIN spendsense.merchant_alias ma_user
-                    ON ma_user.user_id = n.user_id AND ma_user.merchant_hash = n.m_hash
-                LEFT JOIN spendsense.merchant_alias ma_global
-                    ON ma_global.user_id IS NULL AND ma_global.merchant_hash = n.m_hash
+                LEFT JOIN spendsense.merchant_alias ma
+                    ON ma.normalized_alias = n.m_norm
+                LEFT JOIN spendsense.dim_merchant dm_from_alias
+                    ON dm_from_alias.merchant_id = ma.merchant_id
+                    AND dm_from_alias.active = TRUE
             ),
             m_match AS (
                 SELECT
                     a.*,
-                    dm.merchant_id,
                     COALESCE(
-                        a.user_alias_name,
-                        a.global_alias_name,
+                        a.alias_merchant_id,
+                        dm.merchant_id
+                    ) AS merchant_id,
+                    COALESCE(
+                        a.alias_merchant_name,
                         dm.normalized_name,
                         CASE 
                             WHEN NULLIF(a.m_norm, '') IS NOT NULL 
-                            THEN INITCAP(REGEXP_REPLACE(a.m_norm, '\s+', ' ', 'g'))
+                            THEN INITCAP(REGEXP_REPLACE(a.m_norm, '\\s+', ' ', 'g'))
                             ELSE NULL
                         END
                     ) AS normalized_name,
-                    COALESCE(
-                        a.user_alias_channel,
-                        a.global_alias_channel,
-                        a.channel
-                    ) AS resolved_channel
+                    a.channel AS resolved_channel
                 FROM alias_match a
                 LEFT JOIN spendsense.dim_merchant dm
                     ON dm.normalized_name = COALESCE(
-                        a.user_alias_name,
-                        a.global_alias_name,
+                        a.alias_merchant_name,
                         CASE 
                             WHEN NULLIF(a.m_norm, '') IS NOT NULL 
-                            THEN INITCAP(REGEXP_REPLACE(a.m_norm, '\s+', ' ', 'g'))
+                            THEN INITCAP(REGEXP_REPLACE(a.m_norm, '\\s+', ' ', 'g'))
                             ELSE NULL
                         END
                     )
+                    AND dm.active = TRUE
             )
             INSERT INTO spendsense.txn_fact (
                 user_id, upload_id, source_type, account_ref, txn_external_id, txn_date,
@@ -228,29 +226,55 @@ async def _ingest(
             """,
             batch_id,
         )
+        
+        # Log how many were actually inserted vs deduplicated
+        staging_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM spendsense.txn_staging WHERE upload_id = $1",
+            batch_id
+        )
+        fact_count_new = await conn.fetchval("""
+            SELECT COUNT(*) 
+            FROM spendsense.txn_fact 
+            WHERE upload_id = $1
+        """, batch_id)
+        fact_count_total = await conn.fetchval("""
+            SELECT COUNT(DISTINCT tf.txn_id)
+            FROM spendsense.txn_staging ts
+            JOIN spendsense.txn_fact tf ON (
+                tf.user_id = ts.user_id
+                AND tf.txn_date = ts.txn_date
+                AND tf.amount = ts.amount
+                AND tf.direction = ts.direction
+                AND COALESCE(tf.txn_external_id, '') = COALESCE(ts.raw_txn_id, '')
+            )
+            WHERE ts.upload_id = $1
+        """, batch_id)
+        logger.info(f"Staging → fact: {staging_count} in staging, {fact_count_new} NEW inserted, {fact_count_total} TOTAL matched (including deduplicated)")
+        
         logger.info(f"Staging → fact transformation complete for batch {batch_id}")
 
-        # Populate txn_parsed table with parsed transaction metadata
+        # Populate txn_parsed table with parsed transaction metadata using Python parser
         logger.info(f"Populating txn_parsed table for batch {batch_id}")
         try:
-            await conn.execute("SELECT spendsense.populate_txn_parsed()")
-            parsed_count = await conn.fetchval(
-                """
-                SELECT COUNT(*) 
-                FROM spendsense.txn_parsed tp
-                INNER JOIN spendsense.txn_fact tf ON tf.txn_id = tp.fact_txn_id
-                WHERE tf.upload_id = $1
-                """,
-                batch_id,
-            )
+            parsed_count = await populate_txn_parsed_from_fact(conn, batch_id)
             logger.info(f"Populated {parsed_count} records in txn_parsed for batch {batch_id}")
+            if parsed_count == 0:
+                logger.warning(f"No transactions were parsed for batch {batch_id}. This may indicate deduplication or parsing issues.")
         except Exception as exc:
-            logger.warning(f"Failed to populate txn_parsed for batch {batch_id}: {exc}")
+            logger.error(f"Failed to populate txn_parsed for batch {batch_id}: {exc}", exc_info=True)
+            raise  # Re-raise to fail the batch
 
         # Enrich transactions with categories and subcategories
         logger.info(f"Enriching transactions with categories for batch {batch_id}")
-        enriched_count = await enrich_transactions(conn, user_id, batch_id)
-        logger.info(f"Enriched {enriched_count} transactions for batch {batch_id}")
+        try:
+            enriched_count = await enrich_transactions(conn, user_id, batch_id)
+            logger.info(f"Enriched {enriched_count} transactions for batch {batch_id}")
+            if enriched_count == 0:
+                logger.warning(f"No transactions were enriched for batch {batch_id}. This may indicate no parsed transactions or enrichment rule issues.")
+        except Exception as exc:
+            logger.error(f"Failed to enrich transactions for batch {batch_id}: {exc}", exc_info=True)
+            # Don't fail the batch if enrichment fails - transactions are still usable
+            logger.warning(f"Continuing despite enrichment failure for batch {batch_id}")
 
         logger.info(f"Marking batch {batch_id} as loaded")
         await conn.execute(

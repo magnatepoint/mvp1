@@ -6,10 +6,12 @@ import { useAuth } from './auth/hooks/useAuth'
 import { MolyConsole } from './features/molyconsole/MolyConsole'
 import { SpendSenseScreen } from './features/spendsense/SpendSenseScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
+import { GoalCompassScreen } from './features/goalcompass/GoalCompassScreen'
+import { ThemeSwitcher } from './components/ThemeSwitcher'
 
 export default function Home() {
   const { user, session, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth()
-  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'settings'>('console')
+  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'goalcompass' | 'settings'>('console')
   const [navOpen, setNavOpen] = useState(false)
 
   const handleSignIn = async (email: string, password: string) => {
@@ -57,18 +59,23 @@ export default function Home() {
           <div>
             <p className="eyebrow">Monytix</p>
             <h2 className="top-bar__title">
-              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : 'Settings'}
+              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : activeView === 'goalcompass' ? 'GoalCompass' : 'Settings'}
             </h2>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <ThemeSwitcher />
           <button className="ghost-button" onClick={() => void signOut()}>
             Sign out
           </button>
+          </div>
         </header>
         <main className="console-shell">
           {activeView === 'console' ? (
             <MolyConsole user={user} session={session} onSignOut={() => void signOut()} />
           ) : activeView === 'spendsense' ? (
             <SpendSenseScreen session={session} />
+          ) : activeView === 'goalcompass' ? (
+            <GoalCompassScreen session={session} />
           ) : (
             <SettingsScreen session={session} />
           )}
@@ -104,6 +111,17 @@ export default function Home() {
               </li>
               <li>
                 <button
+                  className={activeView === 'goalcompass' ? 'nav-link nav-link--active' : 'nav-link'}
+                  onClick={() => {
+                    setActiveView('goalcompass')
+                    setNavOpen(false)
+                  }}
+                >
+                  🧭 GoalCompass
+                </button>
+              </li>
+              <li>
+                <button
                   className={activeView === 'settings' ? 'nav-link nav-link--active' : 'nav-link'}
                   onClick={() => {
                     setActiveView('settings')
@@ -131,6 +149,6 @@ export default function Home() {
         </div>
         <LoginForm onSubmit={handleSignIn} onRegister={handleRegister} onGoogle={handleGoogle} />
       </section>
-    </main>
+      </main>
   )
 }

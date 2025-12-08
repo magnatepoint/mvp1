@@ -12,6 +12,24 @@
   --color-teal-muted: rgba(52, 245, 197, 0.35);
   --color-text: #f9fbff;
   --color-muted: #93a4c2;
+  
+  /* Semantic colors */
+  --color-success: #10b981;
+  --color-success-muted: rgba(16, 185, 129, 0.2);
+  --color-error: #ef4444;
+  --color-error-muted: rgba(239, 68, 68, 0.2);
+  --color-warning: #f59e0b;
+  --color-warning-muted: rgba(245, 158, 11, 0.2);
+  --color-info: #3b82f6;
+  --color-info-muted: rgba(59, 130, 246, 0.2);
+  
+  /* Category colors */
+  --color-category-food: #f59e0b;
+  --color-category-shopping: #8b5cf6;
+  --color-category-transport: #3b82f6;
+  --color-category-utilities: #10b981;
+  --color-category-entertainment: #ec4899;
+  --color-category-health: #ef4444;
   --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.65);
   --shadow-soft: 0 10px 30px rgba(16, 24, 40, 0.45);
   --radius-lg: 24px;
@@ -19,6 +37,29 @@
   --radius-full: 999px;
   --transition-fast: 180ms ease;
   --transition-normal: 280ms ease;
+  
+  /* Typography scale */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  
+  /* Spacing scale */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+  
+  /* Line heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
 }
 
 *,
@@ -42,12 +83,45 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: var(--font-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
   background-color: var(--color-charcoal-deep);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background-image: radial-gradient(circle at 20% 20%, rgba(247, 200, 115, 0.12), transparent 45%),
     radial-gradient(circle at 80% 0%, rgba(52, 245, 197, 0.18), transparent 35%),
     linear-gradient(135deg, #03050a, #060b12 55%, #05070e);
+}
+
+/* Typography hierarchy */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: var(--font-size-4xl);
+  font-weight: 700;
+}
+
+h2 {
+  font-size: var(--font-size-3xl);
+}
+
+h3 {
+  font-size: var(--font-size-2xl);
+}
+
+h4 {
+  font-size: var(--font-size-xl);
+}
+
+p {
+  margin: 0;
+  line-height: var(--line-height-relaxed);
 }
 
 .text-muted {

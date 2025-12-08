@@ -51,46 +51,106 @@ class SpendSenseService:
             status="staging",
         )
 
-    async def get_kpis(self, user_id: str) -> SpendSenseKPI:
-        """Return dashboard KPIs from materialized views with graceful fallbacks."""
+    async def get_kpis(self, user_id: str, month: str | None = None) -> SpendSenseKPI:
+        """Return dashboard KPIs from materialized views with graceful fallbacks.
+        
+        Args:
+            user_id: User ID
+            month: Optional month filter in YYYY-MM format (e.g., '2025-11'). 
+                   If None, returns latest available month.
+        """
+        # Parse month filter if provided
+        target_month = None
+        if month:
+            try:
+                # Validate and parse YYYY-MM format
+                from datetime import datetime
+                target_month = datetime.strptime(month, "%Y-%m").date().replace(day=1)
+            except ValueError:
+                # Invalid format, ignore and use latest
+                pass
+        
         try:
-            row = await self._pool.fetchrow(
-                """
-                SELECT month,
-                       income_amt,
-                       needs_amt,
-                       wants_amt,
-                       assets_amt
-                FROM spendsense.mv_spendsense_dashboard_user_month
-                WHERE user_id = $1
-                ORDER BY month DESC
-                LIMIT 1
-                """,
-                user_id,
-            )
+            if target_month:
+                # Query specific month
+                row = await self._pool.fetchrow(
+                    """
+                    SELECT month,
+                           income_amt,
+                           needs_amt,
+                           wants_amt,
+                           assets_amt
+                    FROM spendsense.mv_spendsense_dashboard_user_month
+                    WHERE user_id = $1
+                      AND month = $2
+                    """,
+                    user_id,
+                    target_month,
+                )
+            else:
+                # Query latest month
+                row = await self._pool.fetchrow(
+                    """
+                    SELECT month,
+                           income_amt,
+                           needs_amt,
+                           wants_amt,
+                           assets_amt
+                    FROM spendsense.mv_spendsense_dashboard_user_month
+                    WHERE user_id = $1
+                    ORDER BY month DESC
+                    LIMIT 1
+                    """,
+                    user_id,
+                )
 
             if not row:
-                return await self._compute_kpis_fallback(user_id)
+                return await self._compute_kpis_fallback(user_id, target_month)
 
             month = row["month"]
-            categories = await self._pool.fetch(
-                """
-                SELECT mc.category_code,
-                       COALESCE(dc.category_name, mc.category_code) AS category_name,
-                       mc.txn_count,
-                       mc.spend_amount,
-                       mc.income_amount
-                FROM spendsense.mv_spendsense_dashboard_user_month_category mc
-                LEFT JOIN spendsense.dim_category dc
-                    ON dc.category_code = mc.category_code
-                WHERE mc.user_id = $1
-                  AND mc.month = $2
-                ORDER BY mc.spend_amount DESC
-                LIMIT 5
-                """,
-                user_id,
-                month,
-            )
+            # Try to get categories from materialized view, fallback to direct query if it doesn't exist
+            try:
+                categories = await self._pool.fetch(
+                    """
+                    SELECT mc.category_code,
+                           COALESCE(dc.category_name, mc.category_code) AS category_name,
+                           mc.txn_count,
+                           mc.spend_amount,
+                           mc.income_amount
+                    FROM spendsense.mv_spendsense_dashboard_user_month_category mc
+                    LEFT JOIN spendsense.dim_category dc
+                        ON dc.category_code = mc.category_code
+                    WHERE mc.user_id = $1
+                      AND mc.month = $2
+                    ORDER BY mc.spend_amount DESC
+                    LIMIT 5
+                    """,
+                    user_id,
+                    month,
+                )
+            except asyncpg.PostgresError:
+                # Materialized view doesn't exist, compute categories directly
+                categories = await self._pool.fetch(
+                    """
+                    SELECT 
+                        COALESCE(e.category_id, 'uncategorized') AS category_code,
+                        COALESCE(dc.category_name, 'Uncategorized') AS category_name,
+                        COUNT(*) AS txn_count,
+                        SUM(CASE WHEN f.direction = 'debit' THEN f.amount ELSE 0 END) AS spend_amount,
+                        SUM(CASE WHEN f.direction = 'credit' THEN f.amount ELSE 0 END) AS income_amount
+                    FROM spendsense.txn_fact f
+                    LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+                    LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+                    LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
+                    WHERE f.user_id = $1
+                      AND DATE_TRUNC('month', f.txn_date)::date = $2
+                    GROUP BY e.category_id, dc.category_name
+                    ORDER BY spend_amount DESC
+                    LIMIT 5
+                    """,
+                    user_id,
+                    month,
+                )
             prev_month_map = await self._fetch_prev_month_category_spend(user_id, month)
             top_categories = self._build_category_badges(categories, prev_month_map)
 
@@ -120,7 +180,7 @@ class SpendSenseService:
             )
         except asyncpg.PostgresError as exc:
             logger.warning("KPI materialized view missing, using fallback: %s", exc)
-            return await self._compute_kpis_fallback(user_id)
+            return await self._compute_kpis_fallback(user_id, target_month)
         except Exception as exc:
             logger.error("Failed to load KPIs: %s", exc)
             return SpendSenseKPI(
@@ -135,8 +195,45 @@ class SpendSenseService:
                 recent_loot_drop=None,
             )
 
-    async def _compute_kpis_fallback(self, user_id: str) -> SpendSenseKPI:
-        """Compute KPIs directly from txn_fact when MVs aren't available."""
+    async def _compute_kpis_fallback(self, user_id: str, target_month: date | None = None) -> SpendSenseKPI:
+        """Compute KPIs directly from txn_fact when MVs aren't available.
+        
+        Args:
+            user_id: User ID
+            target_month: Optional target month. If None, uses latest available month.
+        """
+        from datetime import date
+        
+        # Determine which month to use
+        if target_month:
+            latest_month = target_month
+        else:
+            # Get the latest month with transactions
+            latest_month_row = await self._pool.fetchrow(
+                """
+                SELECT DATE_TRUNC('month', MAX(txn_date))::date AS latest_month
+                FROM spendsense.txn_fact
+                WHERE user_id = $1
+                """,
+                user_id,
+            )
+            
+            if not latest_month_row or not latest_month_row["latest_month"]:
+                # No transactions at all
+                return SpendSenseKPI(
+                    month=None,
+                    income_amount=0.0,
+                    needs_amount=0.0,
+                    wants_amount=0.0,
+                    assets_amount=0.0,
+                    top_categories=[],
+                    wants_gauge=self._build_wants_gauge(0.0, 0.0),
+                    best_month=None,
+                    recent_loot_drop=None,
+                )
+            
+            latest_month = latest_month_row["latest_month"]
+        
         row = await self._pool.fetchrow(
             """
             WITH enriched AS (
@@ -144,16 +241,17 @@ class SpendSenseService:
                     f.txn_date,
                     f.amount,
                     f.direction,
-                    COALESCE(e.category_code, 'uncategorized') AS category_code,
+                    COALESCE(e.category_id, 'uncategorized') AS category_code,
                     COALESCE(dc.txn_type, 'needs') AS txn_type
                 FROM spendsense.txn_fact f
-                LEFT JOIN spendsense.txn_enriched e ON e.txn_id = f.txn_id
-                LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_code
+                LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+                LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+                LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
                 WHERE f.user_id = $1
-                  AND f.txn_date >= DATE_TRUNC('month', NOW())
+                  AND DATE_TRUNC('month', f.txn_date)::date = $2
             )
             SELECT
-                DATE_TRUNC('month', NOW())::date AS month,
+                $2::date AS month,
                 COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END), 0) AS income_amount,
                 COALESCE(SUM(CASE WHEN txn_type = 'needs' THEN amount ELSE 0 END), 0) AS needs_amount,
                 COALESCE(SUM(CASE WHEN txn_type = 'wants' THEN amount ELSE 0 END), 0) AS wants_amount,
@@ -161,6 +259,7 @@ class SpendSenseService:
             FROM enriched
             """,
             user_id,
+            latest_month,
         )
 
         month: date | None = row["month"] if row else None
@@ -168,36 +267,43 @@ class SpendSenseService:
         categories = await self._pool.fetch(
             """
             SELECT
-                COALESCE(e.category_code, 'uncategorized') AS category_code,
-                COALESCE(dc.category_name, e.category_code, 'Uncategorized') AS category_name,
+                COALESCE(e.category_id, 'uncategorized') AS category_code,
+                COALESCE(dc.category_name, e.category_id, 'Uncategorized') AS category_name,
                 COUNT(*) AS txn_count,
                 SUM(CASE WHEN f.direction = 'debit' THEN f.amount ELSE 0 END) AS spend_amount,
                 SUM(CASE WHEN f.direction = 'credit' THEN f.amount ELSE 0 END) AS income_amount
             FROM spendsense.txn_fact f
-            LEFT JOIN spendsense.txn_enriched e ON e.txn_id = f.txn_id
-            LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_code
+            LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+            LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+            LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
             WHERE f.user_id = $1
-              AND f.txn_date >= DATE_TRUNC('month', NOW())
+              AND DATE_TRUNC('month', f.txn_date)::date = $2
             GROUP BY 1, 2
             ORDER BY spend_amount DESC NULLS LAST
             LIMIT 5
             """,
             user_id,
+            latest_month,
         )
 
+        # Get previous month for comparison
+        prev_month = latest_month - timedelta(days=32)  # Go back ~1 month, then truncate
+        prev_month = prev_month.replace(day=1)
+        
         prev_categories_rows = await self._pool.fetch(
             """
             SELECT
-                COALESCE(e.category_code, 'uncategorized') AS category_code,
+                COALESCE(e.category_id, 'uncategorized') AS category_code,
                 SUM(CASE WHEN f.direction = 'debit' THEN f.amount ELSE 0 END) AS spend_amount
             FROM spendsense.txn_fact f
-            LEFT JOIN spendsense.txn_enriched e ON e.txn_id = f.txn_id
+            LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+            LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
             WHERE f.user_id = $1
-              AND f.txn_date >= DATE_TRUNC('month', NOW() - INTERVAL '1 month')
-              AND f.txn_date < DATE_TRUNC('month', NOW())
+              AND DATE_TRUNC('month', f.txn_date)::date = $2
             GROUP BY 1
             """,
             user_id,
+            prev_month,
         )
 
         prev_map = {row["category_code"]: float(row["spend_amount"] or 0) for row in prev_categories_rows}
@@ -347,8 +453,9 @@ class SpendSenseService:
                        SUM(CASE WHEN COALESCE(dc.txn_type, 'needs') = 'needs' THEN f.amount ELSE 0 END) AS needs_amount,
                        SUM(CASE WHEN COALESCE(dc.txn_type, 'needs') = 'wants' THEN f.amount ELSE 0 END) AS wants_amount
                 FROM spendsense.txn_fact f
-                LEFT JOIN spendsense.txn_enriched e ON e.txn_id = f.txn_id
-                LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_code
+                LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+                LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+                LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
                 WHERE f.user_id = $1
                 GROUP BY 1
             ) stats
@@ -371,8 +478,9 @@ class SpendSenseService:
                            SUM(CASE WHEN COALESCE(dc.txn_type, 'needs') = 'needs' THEN f.amount ELSE 0 END) AS needs_amount,
                            SUM(CASE WHEN COALESCE(dc.txn_type, 'needs') = 'wants' THEN f.amount ELSE 0 END) AS wants_amount
                     FROM spendsense.txn_fact f
-                    LEFT JOIN spendsense.txn_enriched e ON e.txn_id = f.txn_id
-                    LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_code
+                    LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+                    LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+                    LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
                     WHERE f.user_id = $1
                     GROUP BY 1
                 ) stats
@@ -413,9 +521,7 @@ class SpendSenseService:
 
         return BestMonthSnapshot(
             month=best_row["month"],
-            income_amount=float(best_row_dict.get(income_key, 0) or 0),
-            needs_amount=float(best_row_dict.get(needs_key, 0) or 0),
-            wants_amount=float(best_row_dict.get(wants_key, 0) or 0),
+            net_amount=best_net,
             delta_pct=delta_pct,
             is_current_best=is_current_best,
         )
@@ -449,10 +555,8 @@ class SpendSenseService:
         transactions = parsed or total
         return LootDropSummary(
             batch_id=str(row["upload_id"]),
-            file_name=row["file_name"],
-            transactions_ingested=transactions,
-            status=row["status"],
             occurred_at=row["received_at"],
+            transactions_unlocked=transactions,
             rarity=self._rarity_from_records(transactions),
         )
 
@@ -746,10 +850,11 @@ class SpendSenseService:
             f.description,
             f.amount,
             f.direction,
-            e.category_code AS original_category,
-            e.subcategory_code AS original_subcategory
+            e.category_id AS original_category,
+            e.subcategory_id AS original_subcategory
         FROM spendsense.txn_fact f
-        LEFT JOIN spendsense.txn_enriched e ON e.txn_id = f.txn_id
+        LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+        LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
         WHERE f.txn_id = $1 AND f.user_id = $2
         """
         original = await self._pool.fetchrow(original_query, txn_id, user_id)
@@ -806,6 +911,29 @@ class SpendSenseService:
         if category_code and category_code != original.get("original_category"):
             conn = await self._pool.acquire()
             try:
+                # Learn from edit: create merchant rule for future transactions
+                from .services.learning_service import learn_from_edit
+                
+                merchant_name = original.get("merchant_name_norm") or ""
+                description = original.get("description") or ""
+                
+                if merchant_name:
+                    rule_id = await learn_from_edit(
+                        conn,
+                        user_id,
+                        merchant_name,
+                        description,
+                        category_code,
+                        subcategory_code,
+                        txn_id,
+                    )
+                    if rule_id:
+                        logger.info(
+                            f"Created merchant rule from user edit: {merchant_name} → "
+                            f"{category_code}/{subcategory_code} (rule_id: {rule_id})"
+                        )
+                
+                # Also record feedback for ML training
                 predictor_service = get_predictor_service()
                 await predictor_service.record_feedback(
                     conn,
@@ -815,8 +943,8 @@ class SpendSenseService:
                     original.get("original_subcategory"),
                     category_code,
                     subcategory_code,
-                    original.get("merchant_name_norm"),
-                    original.get("description"),
+                    merchant_name,
+                    description,
                     float(original.get("amount", 0)),
                     original.get("direction"),
                 )
@@ -977,8 +1105,8 @@ class SpendSenseService:
             rows = await self._pool.fetch(query)
         return [
             {
-                "code": row["category_code"],
-                "name": row["category_name"],
+                "category_code": row["category_code"],
+                "category_name": row["category_name"],
                 "is_custom": row.get("is_custom", False),
             }
             for row in rows
@@ -1025,10 +1153,9 @@ class SpendSenseService:
                 rows = await self._pool.fetch(query)
         return [
             {
-                "code": row["subcategory_code"],
-                "name": row["subcategory_name"],
+                "subcategory_code": row["subcategory_code"],
+                "subcategory_name": row["subcategory_name"],
                 "category_code": row["category_code"],
-                "is_custom": row.get("is_custom", False),
             }
             for row in rows
         ]
@@ -1129,10 +1256,14 @@ class SpendSenseService:
     async def re_enrich_transactions(self, user_id: str) -> int:
         """Delete existing enriched records and re-run enrichment with updated merchant rules."""
         # Delete existing enriched records
+        # Join through txn_parsed to get parsed_id from txn_fact.txn_id
         await self._pool.execute("""
             DELETE FROM spendsense.txn_enriched 
-            WHERE txn_id IN (
-                SELECT txn_id FROM spendsense.txn_fact WHERE user_id = $1
+            WHERE parsed_id IN (
+                SELECT tp.parsed_id
+                FROM spendsense.txn_parsed tp
+                JOIN spendsense.txn_fact tf ON tp.fact_txn_id = tf.txn_id
+                WHERE tf.user_id = $1
             )
         """, user_id)
         
@@ -1145,4 +1276,289 @@ class SpendSenseService:
             await self._pool.release(conn)
         
         return enriched_count
+
+    async def get_available_months(self, user_id: str) -> list[str]:
+        """Get list of available months with transaction data in YYYY-MM format."""
+        rows = await self._pool.fetch(
+            """
+            SELECT DISTINCT DATE_TRUNC('month', txn_date)::date AS month
+            FROM spendsense.txn_fact
+            WHERE user_id = $1
+            ORDER BY month DESC
+            """,
+            user_id,
+        )
+        return [row["month"].strftime("%Y-%m") for row in rows]
+
+    async def get_insights(self, user_id: str, start_date: date | None = None, end_date: date | None = None) -> dict[str, Any]:
+        """Get comprehensive insights including time-series, category breakdown, trends, and recurring transactions."""
+        
+        # Default to last 12 months if no date range provided
+        if not end_date:
+            end_date = date.today()
+        if not start_date:
+            from datetime import timedelta
+            start_date = end_date - timedelta(days=365)
+        
+        # 1. Time-series data (monthly spending)
+        time_series_rows = await self._pool.fetch(
+            """
+            SELECT 
+                DATE_TRUNC('month', tf.txn_date)::date AS month,
+                SUM(CASE WHEN tf.direction = 'credit' THEN tf.amount ELSE 0 END) AS income,
+                SUM(CASE WHEN tf.direction = 'debit' THEN tf.amount ELSE 0 END) AS expenses
+            FROM spendsense.txn_fact tf
+            WHERE tf.user_id = $1
+              AND tf.txn_date >= $2
+              AND tf.txn_date <= $3
+            GROUP BY DATE_TRUNC('month', tf.txn_date)
+            ORDER BY month ASC
+            """,
+            user_id,
+            start_date,
+            end_date,
+        )
+        
+        time_series = [
+            {
+                "date": row["month"].strftime("%Y-%m"),
+                "value": float(row["expenses"] or 0),
+                "label": row["month"].strftime("%b %Y")
+            }
+            for row in time_series_rows
+        ]
+        
+        # 2. Category breakdown (current period)
+        category_rows = await self._pool.fetch(
+            """
+            SELECT 
+                COALESCE(te.category_id, 'uncategorized') AS category_code,
+                COALESCE(dc.category_name, 'Uncategorized') AS category_name,
+                COUNT(*) AS txn_count,
+                SUM(CASE WHEN tf.direction = 'debit' THEN tf.amount ELSE 0 END) AS total_amount
+            FROM spendsense.txn_fact tf
+            LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = tf.txn_id
+            LEFT JOIN spendsense.txn_enriched te ON te.parsed_id = tp.parsed_id
+            LEFT JOIN spendsense.dim_category dc ON dc.category_code = te.category_id
+            WHERE tf.user_id = $1
+              AND tf.txn_date >= $2
+              AND tf.txn_date <= $3
+              AND tf.direction = 'debit'
+            GROUP BY te.category_id, dc.category_name
+            HAVING SUM(CASE WHEN tf.direction = 'debit' THEN tf.amount ELSE 0 END) > 0
+            ORDER BY total_amount DESC
+            """,
+            user_id,
+            start_date,
+            end_date,
+        )
+        
+        total_spend = sum(float(row["total_amount"] or 0) for row in category_rows)
+        
+        category_breakdown = [
+            {
+                "category_code": row["category_code"],
+                "category_name": row["category_name"],
+                "amount": float(row["total_amount"] or 0),
+                "percentage": (float(row["total_amount"] or 0) / total_spend * 100) if total_spend > 0 else 0,
+                "transaction_count": row["txn_count"],
+                "avg_transaction": float(row["total_amount"] or 0) / row["txn_count"] if row["txn_count"] > 0 else 0,
+            }
+            for row in category_rows
+        ]
+        
+        # 3. Spending trends (monthly breakdown by needs/wants/assets)
+        trend_rows = await self._pool.fetch(
+            """
+            SELECT 
+                DATE_TRUNC('month', tf.txn_date)::date AS month,
+                SUM(CASE WHEN tf.direction = 'credit' THEN tf.amount ELSE 0 END) AS income,
+                SUM(CASE WHEN tf.direction = 'debit' THEN tf.amount ELSE 0 END) AS expenses,
+                SUM(CASE WHEN tf.direction = 'debit' AND COALESCE(dc.txn_type, 'wants') = 'needs' THEN tf.amount ELSE 0 END) AS needs,
+                SUM(CASE WHEN tf.direction = 'debit' AND COALESCE(dc.txn_type, 'wants') = 'wants' THEN tf.amount ELSE 0 END) AS wants,
+                SUM(CASE WHEN tf.direction = 'debit' AND COALESCE(dc.txn_type, 'wants') = 'assets' THEN tf.amount ELSE 0 END) AS assets
+            FROM spendsense.txn_fact tf
+            LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = tf.txn_id
+            LEFT JOIN spendsense.txn_enriched te ON te.parsed_id = tp.parsed_id
+            LEFT JOIN spendsense.dim_category dc ON dc.category_code = te.category_id
+            WHERE tf.user_id = $1
+              AND tf.txn_date >= $2
+              AND tf.txn_date <= $3
+            GROUP BY DATE_TRUNC('month', tf.txn_date)
+            ORDER BY month ASC
+            """,
+            user_id,
+            start_date,
+            end_date,
+        )
+        
+        spending_trends = [
+            {
+                "period": row["month"].strftime("%Y-%m"),
+                "income": float(row["income"] or 0),
+                "expenses": float(row["expenses"] or 0),
+                "net": float(row["income"] or 0) - float(row["expenses"] or 0),
+                "needs": float(row["needs"] or 0),
+                "wants": float(row["wants"] or 0),
+                "assets": float(row["assets"] or 0),
+            }
+            for row in trend_rows
+        ]
+        
+        # 4. Recurring transactions detection
+        recurring_rows = await self._pool.fetch(
+            """
+            WITH merchant_transactions AS (
+                SELECT 
+                    COALESCE(te.merchant_name, tp.counterparty_name, tf.merchant_name_norm) AS merchant_name,
+                    te.category_id,
+                    te.subcategory_id,
+                    tf.amount,
+                    tf.txn_date,
+                    COUNT(*) OVER (PARTITION BY COALESCE(te.merchant_name, tp.counterparty_name, tf.merchant_name_norm), te.category_id) AS txn_count
+                FROM spendsense.txn_fact tf
+                LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = tf.txn_id
+                LEFT JOIN spendsense.txn_enriched te ON te.parsed_id = tp.parsed_id
+                WHERE tf.user_id = $1
+                  AND tf.txn_date >= $2
+                  AND tf.txn_date <= $3
+                  AND tf.direction = 'debit'
+                  AND COALESCE(te.merchant_name, tp.counterparty_name, tf.merchant_name_norm) IS NOT NULL
+            ),
+            recurring_candidates AS (
+                SELECT 
+                    merchant_name,
+                    category_id,
+                    subcategory_id,
+                    COUNT(*) AS occurrence_count,
+                    AVG(amount) AS avg_amount,
+                    SUM(amount) AS total_amount,
+                    MIN(txn_date) AS first_occurrence,
+                    MAX(txn_date) AS last_occurrence,
+                    COUNT(DISTINCT DATE_TRUNC('month', txn_date)) AS distinct_months
+                FROM merchant_transactions
+                WHERE txn_count >= 3  -- At least 3 occurrences
+                GROUP BY merchant_name, category_id, subcategory_id
+                HAVING COUNT(*) >= 3
+            )
+            SELECT 
+                rc.merchant_name,
+                rc.category_id AS category_code,
+                COALESCE(dc.category_name, rc.category_id) AS category_name,
+                rc.subcategory_id AS subcategory_code,
+                COALESCE(ds.subcategory_name, rc.subcategory_id) AS subcategory_name,
+                rc.occurrence_count AS transaction_count,
+                rc.avg_amount,
+                rc.total_amount,
+                rc.last_occurrence,
+                CASE 
+                    WHEN rc.distinct_months >= 2 AND rc.occurrence_count / rc.distinct_months >= 0.8 THEN 'monthly'
+                    WHEN rc.occurrence_count >= 20 THEN 'daily'
+                    WHEN rc.occurrence_count >= 10 THEN 'weekly'
+                    ELSE 'irregular'
+                END AS frequency,
+                (rc.last_occurrence + INTERVAL '1 month')::date AS next_expected
+            FROM recurring_candidates rc
+            LEFT JOIN spendsense.dim_category dc ON dc.category_code = rc.category_id
+            LEFT JOIN spendsense.dim_subcategory ds ON ds.subcategory_code = rc.subcategory_id
+            ORDER BY rc.total_amount DESC
+            LIMIT 20
+            """,
+            user_id,
+            start_date,
+            end_date,
+        )
+        
+        recurring_transactions = [
+            {
+                "merchant_name": row["merchant_name"],
+                "category_code": row["category_code"],
+                "category_name": row["category_name"],
+                "subcategory_code": row["subcategory_code"],
+                "subcategory_name": row["subcategory_name"],
+                "frequency": row["frequency"],
+                "avg_amount": float(row["avg_amount"] or 0),
+                "last_occurrence": row["last_occurrence"].isoformat() if row["last_occurrence"] else None,
+                "next_expected": row["next_expected"].isoformat() if row["next_expected"] else None,
+                "transaction_count": row["transaction_count"],
+                "total_amount": float(row["total_amount"] or 0),
+            }
+            for row in recurring_rows
+        ]
+        
+        # 5. Spending patterns (day of week, time patterns)
+        pattern_rows = await self._pool.fetch(
+            """
+            SELECT 
+                TO_CHAR(tf.txn_date, 'Day') AS day_of_week,
+                COUNT(*) AS txn_count,
+                SUM(CASE WHEN tf.direction = 'debit' THEN tf.amount ELSE 0 END) AS total_amount
+            FROM spendsense.txn_fact tf
+            WHERE tf.user_id = $1
+              AND tf.txn_date >= $2
+              AND tf.txn_date <= $3
+              AND tf.direction = 'debit'
+            GROUP BY TO_CHAR(tf.txn_date, 'Day')
+            ORDER BY total_amount DESC
+            """,
+            user_id,
+            start_date,
+            end_date,
+        )
+        
+        spending_patterns = [
+            {
+                "day_of_week": row["day_of_week"].strip(),
+                "amount": float(row["total_amount"] or 0),
+                "transaction_count": row["txn_count"],
+            }
+            for row in pattern_rows
+        ]
+        
+        # 6. Top merchants
+        top_merchants_rows = await self._pool.fetch(
+            """
+            SELECT 
+                COALESCE(te.merchant_name, tp.counterparty_name, tf.merchant_name_norm, 'Unknown') AS merchant_name,
+                COUNT(*) AS txn_count,
+                SUM(CASE WHEN tf.direction = 'debit' THEN tf.amount ELSE 0 END) AS total_spend,
+                AVG(CASE WHEN tf.direction = 'debit' THEN tf.amount ELSE 0 END) AS avg_spend,
+                MAX(tf.txn_date) AS last_transaction
+            FROM spendsense.txn_fact tf
+            LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = tf.txn_id
+            LEFT JOIN spendsense.txn_enriched te ON te.parsed_id = tp.parsed_id
+            WHERE tf.user_id = $1
+              AND tf.txn_date >= $2
+              AND tf.txn_date <= $3
+              AND tf.direction = 'debit'
+            GROUP BY COALESCE(te.merchant_name, tp.counterparty_name, tf.merchant_name_norm, 'Unknown')
+            HAVING COUNT(*) >= 2
+            ORDER BY total_spend DESC
+            LIMIT 15
+            """,
+            user_id,
+            start_date,
+            end_date,
+        )
+        
+        top_merchants = [
+            {
+                "merchant_name": row["merchant_name"],
+                "transaction_count": row["txn_count"],
+                "total_spend": float(row["total_spend"] or 0),
+                "avg_spend": float(row["avg_spend"] or 0),
+                "last_transaction": row["last_transaction"].isoformat() if row["last_transaction"] else None,
+            }
+            for row in top_merchants_rows
+        ]
+        
+        return {
+            "time_series": time_series,
+            "category_breakdown": category_breakdown,
+            "spending_trends": spending_trends,
+            "recurring_transactions": recurring_transactions,
+            "spending_patterns": spending_patterns,
+            "top_merchants": top_merchants,
+            "anomalies": None,  # TODO: Implement anomaly detection
+        }
 

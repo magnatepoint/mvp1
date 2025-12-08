@@ -201,17 +201,18 @@ async def _persist_and_enrich(
                 tf.amount,
                 tf.direction,
                 tf.merchant_name_norm,
-                te.category_code,
-                te.subcategory_code,
-                te.txn_type,
-                te.matched_rule_id,
+                te.category_id AS category_code,
+                te.subcategory_id AS subcategory_code,
+                te.cat_l1 AS txn_type,
+                te.rule_id AS matched_rule_id,
                 dc.category_name,
                 ds.subcategory_name
             FROM spendsense.txn_fact tf
-            JOIN spendsense.txn_enriched te ON te.txn_id = tf.txn_id
-            LEFT JOIN spendsense.dim_category dc ON dc.category_code = te.category_code
-            LEFT JOIN spendsense.dim_subcategory ds ON ds.subcategory_code = te.subcategory_code 
-                AND ds.category_code = te.category_code
+            JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = tf.txn_id
+            JOIN spendsense.txn_enriched te ON te.parsed_id = tp.parsed_id
+            LEFT JOIN spendsense.dim_category dc ON dc.category_code = te.category_id
+            LEFT JOIN spendsense.dim_subcategory ds ON ds.subcategory_code = te.subcategory_id 
+                AND ds.category_code = te.category_id
             WHERE tf.upload_id = $1
             ORDER BY tf.txn_date DESC
             """,

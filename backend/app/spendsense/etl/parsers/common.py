@@ -39,6 +39,7 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "details",
         "particulars",
         "remarks",
+        "transaction remarks",
         "note",
         "memo",
         "transaction details",
@@ -201,6 +202,80 @@ def _expand_multiline_rows(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(expanded_rows, columns=columns)
 
 
+def _column_canonical_name(column: str) -> str | None:
+    token = _normalize_token(str(column))
+    for canonical, aliases in NORMALIZED_ALIASES.items():
+        if token in aliases:
+            return canonical
+    return None
+
+
+def _collapse_pdf_continuation_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Merge PDF rows where descriptions wrap onto subsequent rows."""
+    if df.empty:
+        return df
+
+    date_column: str | None = None
+    text_columns: set[str] = set()
+    for column in df.columns:
+        canonical = _column_canonical_name(column)
+        if canonical == "txn_date" and date_column is None:
+            date_column = column
+        if canonical == "description":
+            text_columns.add(column)
+
+    if date_column is None:
+        return df
+
+    merged_rows: list[dict[str, Any]] = []
+    current_row: dict[str, Any] | None = None
+
+    def _is_blank(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, float) and pd.isna(value):
+            return True
+        value_str = str(value).strip()
+        return value_str == "" or value_str.lower() in {"nan", "none"}
+
+    for _, row in df.iterrows():
+        date_value = row[date_column]
+        date_text = str(date_value).strip() if date_value is not None else ""
+        if date_text and date_text.lower() not in {"nan", "none"}:
+            if current_row is not None:
+                merged_rows.append(current_row)
+            current_row = {col: row[col] for col in df.columns}
+            continue
+
+        if current_row is None:
+            continue
+
+        for column in df.columns:
+            if column == date_column:
+                continue
+            value = row[column]
+            if _is_blank(value):
+                continue
+
+            if column in text_columns:
+                existing = current_row.get(column)
+                if _is_blank(existing):
+                    current_row[column] = str(value).strip()
+                else:
+                    current_row[column] = f"{existing} {str(value).strip()}"
+            else:
+                if _is_blank(current_row.get(column)):
+                    current_row[column] = value
+
+    if current_row is not None:
+        merged_rows.append(current_row)
+
+    if not merged_rows:
+        return df
+
+    return pd.DataFrame(merged_rows, columns=df.columns)
+
+
 def structure_dataframe(df_raw: pd.DataFrame, *, is_pdf: bool) -> pd.DataFrame:
     """Detect headers and return a structured dataframe."""
     if df_raw.empty:
@@ -256,6 +331,7 @@ def structure_dataframe(df_raw: pd.DataFrame, *, is_pdf: bool) -> pd.DataFrame:
         df = df.iloc[found_header_row + 1 :].reset_index(drop=True)
         if is_pdf:
             df = _expand_multiline_rows(df)
+            df = _collapse_pdf_continuation_rows(df)
         else:
             df = df.apply(lambda col: col.map(lambda val: str(val).replace("\n", " ").strip() if isinstance(val, str) else val))
         return df
@@ -395,6 +471,22 @@ def _extract_merchant_from_description(description: str) -> str | None:
                     merchant = merchant[: -len(processor)].rstrip()
             return merchant.strip() if merchant else None
 
+    # NEFT format: NEFT CR-<bank_code>-<merchant_name>-<account_holder>-<reference>
+    # Example: NEFT CR-IDFB0010204-MAGNATEPOINT TECHNOLOGIES PRIVATE L-VENKATA HANUMA SANTOSH MALLA-IDFBN5202510310
+    if desc.upper().startswith("NEFT"):
+        neft_match = re.search(r'NEFT\s+CR-[^-]+-([^-]+(?:-[^-]+)*?)(?:-[^-]+-[^-]+)$', desc, re.IGNORECASE)
+        if neft_match:
+            merchant = neft_match.group(1).strip()
+            # Clean up common suffixes
+            merchant = re.sub(r'\s+(PRIVATE\s+L|PVT\s+L|LTD|LIMITED)$', '', merchant, flags=re.IGNORECASE)
+            return merchant.strip() if merchant else None
+        # Fallback: try simple split
+        parts = desc.split("-")
+        if len(parts) >= 3:
+            merchant = parts[2].strip()
+            merchant = re.sub(r'\s+(PRIVATE\s+L|PVT\s+L|LTD|LIMITED)$', '', merchant, flags=re.IGNORECASE)
+            return merchant.strip() if merchant else None
+
     if desc.upper().startswith("ACH "):
         parts = desc.split("-", 2)
         if len(parts) >= 2:
@@ -408,9 +500,22 @@ def _extract_merchant_from_description(description: str) -> str | None:
             merchant = merchant_part.split("@")[0].split(".")[0].strip()
             return merchant or None
 
+    # SBI Bank format: TO TRANSFER-UPI/DR/<rrn>/<name>/<bank>/<vpa>/<platform>
+    # Example: TO TRANSFER-UPI/DR/730765131673/CHINTALA/SBIN/chvkchanti/Payme--
+    sbi_to_match = re.search(r'TO TRANSFER-UPI/DR/[^/]+/([^/]+)/', desc, re.IGNORECASE)
+    if sbi_to_match:
+        merchant = sbi_to_match.group(1).strip()
+        return merchant.strip() if merchant else None
+
+    # SBI Bank format: BY TRANSFER-UPI/CR/<rrn>/<name>/<bank>/<vpa>/<platform>
+    sbi_by_match = re.search(r'BY TRANSFER-UPI/CR/[^/]+/([^/]+)/', desc, re.IGNORECASE)
+    if sbi_by_match:
+        merchant = sbi_by_match.group(1).strip()
+        return merchant.strip() if merchant else None
+
     if "UPI" in desc.upper() and "/" in desc:
         tokens = [token.strip() for token in re.split(r"[/\-]", desc) if token.strip()]
-        skipped = {"UPI", "UPIOUT", "UPIIN", "UPIINTENT", "UPIPAY", "UPIPAYMENT", "UPIPAYMENTS"}
+        skipped = {"UPI", "UPIOUT", "UPIIN", "UPIINTENT", "UPIPAY", "UPIPAYMENT", "UPIPAYMENTS", "TRANSFER", "TO", "BY"}
         for token in tokens:
             upper = token.upper()
             upper_compact = upper.replace(" ", "")

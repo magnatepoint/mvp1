@@ -1,8 +1,10 @@
 import asyncio
+import logging
 
 import asyncpg
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from .auth import routes as auth_routes
@@ -11,9 +13,13 @@ from .routers import ws as ws_routes
 from .spendsense import routes as spendsense_routes
 from .spendsense.training import routes as training_routes
 from .spendsense.ml import routes as ml_routes
+from .spendsense.merchants import router as merchants_router
 from .gmail import routes as gmail_routes
 from .gmail import test_routes as gmail_test_routes
+from .goals import routes as goals_routes
 from .realtime_subscriber import redis_events_listener
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -42,6 +48,22 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @application.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        """Global exception handler to log errors and return proper responses."""
+        logger.error(
+            f"Unhandled exception: {exc}",
+            exc_info=True,
+            extra={"path": request.url.path, "method": request.method},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "Internal server error",
+                "error": str(exc) if logger.level <= logging.DEBUG else None,
+            },
+        )
+
     @application.on_event("startup")
     async def startup() -> None:
         application.state.db_pool = await asyncpg.create_pool(
@@ -66,13 +88,17 @@ def create_app() -> FastAPI:
         if listener is not None:
             listener.cancel()
 
+    # Include health router at root and /health
+    application.include_router(health.router, tags=["health"])
     application.include_router(health.router, prefix="/health", tags=["health"])
     application.include_router(auth_routes.router)
     application.include_router(spendsense_routes.router)
     application.include_router(training_routes.router)
     application.include_router(ml_routes.router)
+    application.include_router(merchants_router, prefix="/api")
     application.include_router(gmail_routes.router)
     application.include_router(gmail_test_routes.router)
+    application.include_router(goals_routes.router)
     application.include_router(ws_routes.router)
     return application
 

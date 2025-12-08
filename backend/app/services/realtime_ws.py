@@ -8,7 +8,7 @@ _connections: Dict[str, Set[WebSocket]] = {}
 
 
 async def register_ws(user_id: str, websocket: WebSocket) -> None:
-    await websocket.accept()
+    """Register a WebSocket connection for a user. The connection must already be accepted."""
     _connections.setdefault(user_id, set()).add(websocket)
 
 

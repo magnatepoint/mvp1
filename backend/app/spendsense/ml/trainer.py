@@ -219,10 +219,11 @@ async def collect_training_data(conn: asyncpg.Connection, user_id: str | None = 
         f.description,
         f.amount,
         f.direction,
-        COALESCE(lo.category_code, e.category_code) AS category_code,
-        COALESCE(lo.subcategory_code, e.subcategory_code) AS subcategory_code
+        COALESCE(lo.category_code, e.category_id) AS category_code,
+        COALESCE(lo.subcategory_code, e.subcategory_id) AS subcategory_code
     FROM spendsense.txn_fact f
-    LEFT JOIN spendsense.txn_enriched e ON e.txn_id = f.txn_id
+    LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+    LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
     LEFT JOIN LATERAL (
         SELECT category_code, subcategory_code
         FROM spendsense.txn_override
@@ -230,7 +231,7 @@ async def collect_training_data(conn: asyncpg.Connection, user_id: str | None = 
         ORDER BY created_at DESC
         LIMIT 1
     ) lo ON TRUE
-    WHERE COALESCE(lo.category_code, e.category_code) IS NOT NULL
+    WHERE COALESCE(lo.category_code, e.category_id) IS NOT NULL
     """
     
     if user_id:

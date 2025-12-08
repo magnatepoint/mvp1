@@ -577,12 +577,14 @@
 
 .amount-debit {
   text-align: right;
-  color: #f87171;
+  color: var(--color-error);
+  font-weight: 600;
 }
 
 .amount-credit {
   text-align: right;
-  color: var(--color-teal);
+  color: var(--color-success);
+  font-weight: 600;
 }
 
 .spendsense__pagination {
@@ -665,5 +667,360 @@
   margin: 0 0 0.75rem 0;
   color: var(--color-muted);
   font-size: 0.875rem;
+}
+
+.spendsense__chartsSection {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.spendsense__chartCard {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+}
+
+.spendsense__chartTitle {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: center;
+}
+
+/* Mobile transaction cards */
+.spendsense__transactionCards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.spendsense__transactionCard {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+.spendsense__transactionCard:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.spendsense__transactionCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.spendsense__transactionCardMerchant {
+  flex: 1;
+  min-width: 0;
+}
+
+.spendsense__transactionCardMerchantName {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+}
+
+.spendsense__transactionCardAmount {
+  font-size: 1.25rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.spendsense__transactionCardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.spendsense__transactionCardDate {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+@media (max-width: 768px) {
+  .spendsense__chartsSection {
+    grid-template-columns: 1fr;
+  }
+  
+  .spendsense__chartCard {
+    padding: 1rem;
+  }
+  
+  .spendsense__table {
+    display: none;
+  }
+  
+  .spendsense__transactionCards {
+    display: flex;
+  }
+}
+
+@media (min-width: 769px) {
+  .spendsense__transactionCards {
+    display: none;
+  }
+}
+
+/* Expandable transaction details */
+.spendsense__expandButton {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  margin-right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+  border-radius: 4px;
+}
+
+.spendsense__expandButton:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.spendsense__row--expanded {
+  background: rgba(52, 245, 197, 0.03);
+}
+
+.spendsense__rowDetails {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.spendsense__rowDetails td {
+  padding: 0 !important;
+  border-top: none;
+}
+
+.spendsense__detailsContent {
+  padding: 1.5rem;
+}
+
+.spendsense__detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.spendsense__detailsItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.spendsense__detailsLabel {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.spendsense__detailsValue {
+  font-size: 0.95rem;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+/* Enhanced search */
+.spendsense__searchWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.spendsense__searchIcon {
+  position: absolute;
+  left: 1rem;
+  color: var(--color-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.spendsense__searchInput {
+  padding-left: 2.75rem !important;
+  padding-right: 2.5rem !important;
+}
+
+.spendsense__searchClear {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+  z-index: 1;
+}
+
+.spendsense__searchClear:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.spendsense__insightsTab {
+  padding: 1.5rem 0;
+}
+
+.spendsense__insightsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+}
+
+.spendsense__transactionsActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .spendsense__insightsGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .spendsense__transactionsActions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .spendsense__transactionsActions > * {
+    width: 100%;
+  }
+}
+
+/* Overview Cards */
+.spendsense__overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.spendsense__overviewCard {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.spendsense__overviewCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.spendsense__overviewCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0.6;
+}
+
+.spendsense__overviewCard--income::before {
+  background: linear-gradient(90deg, transparent, var(--color-teal), transparent);
+}
+
+.spendsense__overviewCard--expenses::before {
+  background: linear-gradient(90deg, transparent, #ef4444, transparent);
+}
+
+.spendsense__overviewCard--savings::before {
+  background: linear-gradient(90deg, transparent, var(--color-gold), transparent);
+}
+
+.spendsense__overviewCard--assets::before {
+  background: linear-gradient(90deg, transparent, #8b5cf6, transparent);
+}
+
+.spendsense__overviewCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.spendsense__overviewCardLabel {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.spendsense__overviewCardIcon {
+  font-size: 1.5rem;
+  opacity: 0.6;
+}
+
+.spendsense__overviewCardValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+.spendsense__overviewCard--income .spendsense__overviewCardValue {
+  color: var(--color-teal);
+}
+
+.spendsense__overviewCard--expenses .spendsense__overviewCardValue {
+  color: #ef4444;
+}
+
+.spendsense__overviewCard--savings .spendsense__overviewCardValue {
+  color: var(--color-gold);
+}
+
+.spendsense__overviewCard--assets .spendsense__overviewCardValue {
+  color: #8b5cf6;
+}
+
+.spendsense__overviewCardSubtitle {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+@media (max-width: 768px) {
+  .spendsense__overview {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .spendsense__overviewCard {
+    padding: 1.25rem;
+  }
+  
+  .spendsense__overviewCardValue {
+    font-size: 1.5rem;
+  }
 }
 

@@ -1,4 +1,8 @@
+import os
+from typing import Any
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from asyncpg import Pool
 
 from app.auth.dependencies import get_current_user
 from app.auth.models import AuthenticatedUser
@@ -68,10 +72,36 @@ async def stage_transaction(
 
 @router.get("/kpis", response_model=SpendSenseKPI, summary="SpendSense KPI snapshot")
 async def get_kpis(
+    month: str | None = Query(None, description="Month filter in YYYY-MM format (e.g., 2025-11). If not provided, returns latest available month."),
     user: AuthenticatedUser = Depends(get_current_user),
     service: SpendSenseService = Depends(get_service),
 ) -> SpendSenseKPI:
-    return await service.get_kpis(user.user_id)
+    return await service.get_kpis(user.user_id, month=month)
+
+
+@router.get("/kpis/available-months", summary="Get available months with transaction data")
+async def get_available_months(
+    user: AuthenticatedUser = Depends(get_current_user),
+    service: SpendSenseService = Depends(get_service),
+) -> list[str]:
+    """Return list of available months in YYYY-MM format, sorted descending."""
+    return await service.get_available_months(user.user_id)
+
+
+@router.get("/insights", response_model=dict[str, Any], summary="Get comprehensive spending insights")
+async def get_insights(
+    start_date: str | None = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: str | None = Query(None, description="End date in YYYY-MM-DD format"),
+    user: AuthenticatedUser = Depends(get_current_user),
+    service: SpendSenseService = Depends(get_service),
+) -> dict[str, Any]:
+    """Get comprehensive insights including time-series, category breakdown, trends, and recurring transactions."""
+    from datetime import datetime
+    
+    start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
+    end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
+    
+    return await service.get_insights(user.user_id, start_date=start, end_date=end)
 
 
 @router.get(
@@ -114,11 +144,15 @@ async def list_transactions(
         subcategory_code=subcategory_code,
         channel=channel,
     )
+    # Calculate page and page_size from limit and offset
+    page = (offset // limit) + 1 if limit > 0 else 1
+    page_size = limit
+    
     return TransactionListResponse(
         transactions=transactions,
         total=total,
-        limit=limit,
-        offset=offset,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -256,4 +290,106 @@ async def re_enrich_transactions(
     """Delete existing enriched records and re-run enrichment with updated merchant rules."""
     enriched_count = await service.re_enrich_transactions(user.user_id)
     return {"enriched_count": enriched_count}
+
+
+@router.get(
+    "/categories/predict",
+    summary="Predict transaction category",
+)
+async def predict_category(
+    description: str = Query(..., description="Transaction description"),
+    amount: float = Query(..., description="Transaction amount"),
+    merchant: str | None = Query(None, description="Merchant name (optional)"),
+    user: AuthenticatedUser = Depends(get_current_user),
+    pool: Pool = Depends(get_db_pool),
+) -> dict[str, Any]:
+    """
+    Predict transaction category using rule-based matching and ML fallback.
+    
+    Flow:
+    1. Try rule-based merchant_rules (fast, high precision)
+    2. If no rule match, call ML model (TF-IDF + LogisticRegression)
+    3. Final fallback to 'shopping' category
+    
+    The ML model prioritizes merchant names by repeating them in the text features,
+    ensuring merchant names are given more weight in TF-IDF vectorization.
+    """
+    """
+    Predict transaction category using rule-based matching and ML fallback.
+
+    Flow:
+    1. Try rule-based merchant_rules (fast, high precision)
+    2. If no rule match, call ML model (TF-IDF + LogisticRegression)
+    3. Final fallback to 'shopping' category
+    """
+    from app.spendsense.services.pg_rules_client import PGRulesClient
+    from app.spendsense.services.ml_category_model import ml_predict_category
+
+    conn = await pool.acquire()
+    try:
+        # 1) Rule-based matching (merchant_rules + dim_merchant + merchant_alias)
+        rule_match = await PGRulesClient.match_merchant(
+            conn,
+            merchant_name=merchant,
+            description=description,
+            user_id=user.user_id,
+            use_cache=True,
+        )
+
+        if rule_match and rule_match.get("category_code"):
+            return {
+                "category": rule_match.get("category_code"),
+                "subcategory": rule_match.get("subcategory_code"),
+                "confidence": rule_match.get("confidence", 0.9),
+                "rule_id": str(rule_match.get("rule_id", "")) if rule_match.get("rule_id") else None,
+                "merchant_id": str(rule_match.get("merchant_id", "")) if rule_match.get("merchant_id") else None,
+                "method": "rule_based",
+                "match_kind": rule_match.get("match_kind", "unknown"),
+            }
+
+        # 2) ML fallback
+        ml_res = ml_predict_category(
+            description=description,
+            merchant=merchant,
+            amount=amount,
+        )
+
+        if ml_res:
+            return {
+                "category": ml_res["category_code"],
+                "subcategory": None,
+                "confidence": ml_res["confidence"],
+                "rule_id": None,
+                "merchant_id": None,
+                "method": "ml_fallback",
+                "match_kind": None,
+            }
+
+        # 3) Final fallback
+        return {
+            "category": "shopping",
+            "subcategory": None,
+            "confidence": 0.4,
+            "rule_id": None,
+            "merchant_id": None,
+            "method": "fallback",
+            "match_kind": None,
+        }
+    finally:
+        await pool.release(conn)
+
+
+@router.get(
+    "/ml/status",
+    summary="Check ML model availability",
+)
+async def ml_status() -> dict[str, Any]:
+    """Check if ML category prediction model is available."""
+    from app.spendsense.services.ml_category_model import is_ml_available
+    
+    available = is_ml_available()
+    return {
+        "ml_available": available,
+        "model_path": os.getenv("CATEGORY_MODEL_PATH", "models/category_model.joblib"),
+    }
 

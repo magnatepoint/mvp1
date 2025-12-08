@@ -7,10 +7,22 @@ import monytixLogoPng from './assets/monytix-logo.png'
 import { MolyConsole } from './features/molyconsole/MolyConsole'
 import { SpendSenseScreen } from './features/spendsense/SpendSenseScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
+import { GoalsScreen } from './features/goals/GoalsScreen'
+import { GoalCompassScreen } from './features/goalcompass/GoalCompassScreen'
+import { ToastProvider } from './components/Toast'
+import { Compass, Wallet, Target, Settings, Menu, X } from 'lucide-react'
 
 function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
+  )
+}
+
+function AppContent() {
   const { user, session, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth()
-  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'settings'>('console')
+  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'goals' | 'goalcompass' | 'settings'>('console')
   const [navOpen, setNavOpen] = useState(false)
 
   const handleSignIn = async (email: string, password: string) => {
@@ -51,15 +63,57 @@ function App() {
             onClick={() => setNavOpen((prev) => !prev)}
             aria-label="Toggle navigation"
           >
-            <span />
-            <span />
-            <span />
+            {navOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
+      <div className="top-bar__content">
       <div>
             <p className="eyebrow">Monytix</p>
             <h2 className="top-bar__title">
-              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : 'Settings'}
+              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : activeView === 'goals' ? 'Goals' : activeView === 'goalcompass' ? 'GoalCompass' : 'Settings'}
             </h2>
+            </div>
+            <nav className="top-bar__menu">
+              <button
+                className={`top-menu-link ${activeView === 'console' ? 'top-menu-link--active' : ''}`}
+                onClick={() => setActiveView('console')}
+                aria-label="Console"
+              >
+                <Compass size={16} />
+                <span>Console</span>
+              </button>
+              <button
+                className={`top-menu-link ${activeView === 'spendsense' ? 'top-menu-link--active' : ''}`}
+                onClick={() => setActiveView('spendsense')}
+                aria-label="SpendSense"
+              >
+                <Wallet size={16} />
+                <span>SpendSense</span>
+              </button>
+              <button
+                className={`top-menu-link ${activeView === 'goals' ? 'top-menu-link--active' : ''}`}
+                onClick={() => setActiveView('goals')}
+                aria-label="Goals"
+              >
+                <Target size={16} />
+                <span>Goals</span>
+              </button>
+              <button
+                className={`top-menu-link ${activeView === 'goalcompass' ? 'top-menu-link--active' : ''}`}
+                onClick={() => setActiveView('goalcompass')}
+                aria-label="GoalCompass"
+              >
+                <Compass size={16} />
+                <span>GoalCompass</span>
+              </button>
+              <button
+                className={`top-menu-link ${activeView === 'settings' ? 'top-menu-link--active' : ''}`}
+                onClick={() => setActiveView('settings')}
+                aria-label="Settings"
+              >
+                <Settings size={16} />
+                <span>Settings</span>
+              </button>
+            </nav>
       </div>
           <button className="ghost-button" onClick={() => void signOut()}>
             Sign out
@@ -70,13 +124,26 @@ function App() {
             <MolyConsole user={user} session={session} onSignOut={() => void signOut()} />
           ) : activeView === 'spendsense' ? (
             <SpendSenseScreen session={session} />
+          ) : activeView === 'goals' ? (
+            <GoalsScreen session={session} />
+          ) : activeView === 'goalcompass' ? (
+            <GoalCompassScreen session={session} />
           ) : (
             <SettingsScreen session={session} />
           )}
         </main>
         <div className={`nav-overlay ${navOpen ? 'nav-overlay--open' : ''}`}>
           <nav className="nav-drawer glass-card">
-            <p className="eyebrow">Navigate</p>
+            <div className="nav-drawer__header">
+              <p className="eyebrow">Navigate</p>
+              <button
+                className="nav-drawer__close"
+                onClick={() => setNavOpen(false)}
+                aria-label="Close navigation"
+              >
+                <X size={20} />
+              </button>
+            </div>
             <ul>
               <li>
                 <button
@@ -86,7 +153,8 @@ function App() {
                     setNavOpen(false)
                   }}
                 >
-                  🧭 MolyConsole
+                  <Compass size={18} />
+                  <span>MolyConsole</span>
                 </button>
               </li>
               <li>
@@ -97,7 +165,32 @@ function App() {
                     setNavOpen(false)
                   }}
                 >
-                  💸 SpendSense
+                  <Wallet size={18} />
+                  <span>SpendSense</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={activeView === 'goals' ? 'nav-link nav-link--active' : 'nav-link'}
+                  onClick={() => {
+                    setActiveView('goals')
+                    setNavOpen(false)
+                  }}
+                >
+                  <Target size={18} />
+                  <span>Goals</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={activeView === 'goalcompass' ? 'nav-link nav-link--active' : 'nav-link'}
+                  onClick={() => {
+                    setActiveView('goalcompass')
+                    setNavOpen(false)
+                  }}
+                >
+                  <Compass size={18} />
+                  <span>GoalCompass</span>
                 </button>
               </li>
               <li>
@@ -108,8 +201,9 @@ function App() {
                     setNavOpen(false)
                   }}
                 >
-                  ⚙️ Settings
-        </button>
+                  <Settings size={18} />
+                  <span>Settings</span>
+                </button>
               </li>
             </ul>
           </nav>
