@@ -9,8 +9,10 @@ import { SpendSenseScreen } from './features/spendsense/SpendSenseScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { GoalsScreen } from './features/goals/GoalsScreen'
 import { GoalCompassScreen } from './features/goalcompass/GoalCompassScreen'
+import { BudgetPilotScreen } from './features/budgetpilot/BudgetPilotScreen'
+import { MoneyMomentsScreen } from './features/moneymoments/MoneyMomentsScreen'
 import { ToastProvider } from './components/Toast'
-import { Compass, Wallet, Target, Settings, Menu, X } from 'lucide-react'
+import { Compass, Wallet, Target, Settings, Menu, X, Plane, MessageSquare } from 'lucide-react'
 
 function App() {
   return (
@@ -22,7 +24,7 @@ function App() {
 
 function AppContent() {
   const { user, session, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth()
-  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'goals' | 'goalcompass' | 'settings'>('console')
+  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'goals' | 'goalcompass' | 'budgetpilot' | 'moneymoments' | 'settings'>('console')
   const [navOpen, setNavOpen] = useState(false)
 
   const handleSignIn = async (email: string, password: string) => {
@@ -69,7 +71,7 @@ function AppContent() {
       <div>
             <p className="eyebrow">Monytix</p>
             <h2 className="top-bar__title">
-              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : activeView === 'goals' ? 'Goals' : activeView === 'goalcompass' ? 'GoalCompass' : 'Settings'}
+              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : activeView === 'goals' ? 'Goals' : activeView === 'goalcompass' ? 'GoalCompass' : activeView === 'budgetpilot' ? 'BudgetPilot' : activeView === 'moneymoments' ? 'MoneyMoments' : 'Settings'}
             </h2>
             </div>
             <nav className="top-bar__menu">
@@ -106,6 +108,22 @@ function AppContent() {
                 <span>GoalCompass</span>
               </button>
               <button
+                className={`top-menu-link ${activeView === 'budgetpilot' ? 'top-menu-link--active' : ''}`}
+                onClick={() => setActiveView('budgetpilot')}
+                aria-label="BudgetPilot"
+              >
+                <Plane size={16} />
+                <span>BudgetPilot</span>
+              </button>
+              <button
+                className={`top-menu-link ${activeView === 'moneymoments' ? 'top-menu-link--active' : ''}`}
+                onClick={() => setActiveView('moneymoments')}
+                aria-label="MoneyMoments"
+              >
+                <MessageSquare size={16} />
+                <span>MoneyMoments</span>
+              </button>
+              <button
                 className={`top-menu-link ${activeView === 'settings' ? 'top-menu-link--active' : ''}`}
                 onClick={() => setActiveView('settings')}
                 aria-label="Settings"
@@ -128,6 +146,10 @@ function AppContent() {
             <GoalsScreen session={session} />
           ) : activeView === 'goalcompass' ? (
             <GoalCompassScreen session={session} />
+          ) : activeView === 'budgetpilot' ? (
+            <BudgetPilotScreen session={session} />
+          ) : activeView === 'moneymoments' ? (
+            <MoneyMomentsScreen session={session} />
           ) : (
             <SettingsScreen session={session} />
           )}
@@ -191,6 +213,30 @@ function AppContent() {
                 >
                   <Compass size={18} />
                   <span>GoalCompass</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={activeView === 'budgetpilot' ? 'nav-link nav-link--active' : 'nav-link'}
+                  onClick={() => {
+                    setActiveView('budgetpilot')
+                    setNavOpen(false)
+                  }}
+                >
+                  <Plane size={18} />
+                  <span>BudgetPilot</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={activeView === 'moneymoments' ? 'nav-link nav-link--active' : 'nav-link'}
+                  onClick={() => {
+                    setActiveView('moneymoments')
+                    setNavOpen(false)
+                  }}
+                >
+                  <MessageSquare size={18} />
+                  <span>MoneyMoments</span>
                 </button>
               </li>
               <li>

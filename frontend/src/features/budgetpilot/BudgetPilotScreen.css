@@ -1,0 +1,257 @@
+.budgetpilot-screen {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.budgetpilot-header {
+  margin-bottom: 2rem;
+}
+
+.budgetpilot-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary, #fff);
+}
+
+.budgetpilot-subtitle {
+  color: var(--text-secondary, #aaa);
+  font-size: 1rem;
+}
+
+.committed-budget-section {
+  margin-bottom: 3rem;
+}
+
+.committed-budget-section h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text-primary, #fff);
+}
+
+.committed-budget-card {
+  background: var(--card-bg, #1a1a1a);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color, #333);
+}
+
+.budget-summary {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.budget-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.budget-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #aaa);
+}
+
+.budget-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.goal-allocations {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color, #333);
+}
+
+.goal-allocations h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary, #fff);
+}
+
+.goal-allocations ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.goal-allocations li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  color: var(--text-secondary, #aaa);
+  font-size: 0.875rem;
+}
+
+.recommendations-section {
+  margin-top: 2rem;
+}
+
+.recommendations-section h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary, #fff);
+}
+
+.recommendations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.recommendation-card {
+  background: var(--card-bg, #1a1a1a);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color, #333);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.recommendation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.recommendation-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin: 0;
+}
+
+.recommendation-score {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #aaa);
+  background: var(--bg-secondary, #2a2a2a);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.recommendation-description {
+  color: var(--text-secondary, #aaa);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.recommendation-allocation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.allocation-bar {
+  display: flex;
+  height: 24px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-secondary, #2a2a2a);
+}
+
+.allocation-segment {
+  height: 100%;
+}
+
+.allocation-segment.needs {
+  background: #3b82f6; /* blue */
+}
+
+.allocation-segment.wants {
+  background: #f59e0b; /* amber */
+}
+
+.allocation-segment.savings {
+  background: #10b981; /* green */
+}
+
+.allocation-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #aaa);
+}
+
+.recommendation-reason {
+  color: var(--text-primary, #fff);
+  font-size: 0.875rem;
+  font-style: italic;
+  margin: 0;
+  padding: 0.75rem;
+  background: var(--bg-secondary, #2a2a2a);
+  border-radius: 4px;
+}
+
+.goal-preview {
+  margin-top: 0.5rem;
+}
+
+.goal-preview h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary, #fff);
+}
+
+.goal-preview ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.goal-preview li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.375rem 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #aaa);
+}
+
+.commit-button {
+  background: var(--primary-color, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-top: auto;
+}
+
+.commit-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.commit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.committed-badge {
+  background: #10b981;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  margin-top: auto;
+}
+
+.error-message {
+  color: #ef4444;
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+

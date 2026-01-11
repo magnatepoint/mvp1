@@ -1,31 +1,22 @@
 import { useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { env } from '../../env'
 import { Target, TrendingUp, Calendar, Edit2, Trash2, CheckCircle2, Sparkles } from 'lucide-react'
 import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { GoalDetailModal } from '../../components/GoalDetailModal'
+import { fetchGoalsProgress, fetchGoals } from '../../api/goals'
+import type { GoalProgressItem, GoalResponse } from '../../types/goals'
 import './GoalCompassScreen.css'
 
 type Props = {
   session: Session
 }
 
-type GoalProgress = {
-  goal_id: string
-  goal_name: string
-  progress_pct: number
-  current_savings_close: number
-  remaining_amount: number
-  projected_completion_date: string | null
-  milestones: number[]
-}
-
 export function GoalCompassScreen({ session }: Props) {
-  const [goals, setGoals] = useState<GoalProgress[]>([])
+  const [goals, setGoals] = useState<GoalProgressItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedGoal, setSelectedGoal] = useState<GoalProgress | null>(null)
+  const [selectedGoal, setSelectedGoal] = useState<GoalProgressItem | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [goalDetails, setGoalDetails] = useState<{ estimated_cost?: number; target_date?: string | null } | null>(null)
 
@@ -34,26 +25,30 @@ export function GoalCompassScreen({ session }: Props) {
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(`${env.apiBaseUrl}/v1/goals/progress`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
-
-        if (!response.ok) {
-          // If endpoint doesn't exist yet, show placeholder
-          if (response.status === 404) {
-            setError('GoalCompass API not yet implemented')
-            setGoals([])
-            return
-          }
-          throw new Error('Failed to load goal progress')
-        }
-
-        const data = await response.json()
+        const data = await fetchGoalsProgress(session)
+        console.log('Goals progress data received:', data)
         setGoals(data.goals || [])
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load progress')
+        console.error('Error fetching goals progress:', err)
+        let errorMessage = 'Failed to load progress'
+        
+        if (err instanceof Error) {
+          errorMessage = err.message
+        } else if (typeof err === 'string') {
+          errorMessage = err
+        } else if (err && typeof err === 'object') {
+          // Handle error objects
+          const errObj = err as any
+          if (errObj.message) {
+            errorMessage = String(errObj.message)
+          } else if (errObj.detail) {
+            errorMessage = String(errObj.detail)
+          } else {
+            errorMessage = 'An unexpected error occurred'
+          }
+        }
+        
+        setError(errorMessage)
         setGoals([])
       } finally {
         setLoading(false)
@@ -215,20 +210,13 @@ export function GoalCompassScreen({ session }: Props) {
                     
                     // Fetch full goal details if available
                     try {
-                      const response = await fetch(`${env.apiBaseUrl}/v1/goals`, {
-                        headers: {
-                          Authorization: `Bearer ${session.access_token}`,
-                        },
-                      })
-                      if (response.ok) {
-                        const allGoals = await response.json()
-                        const fullGoal = allGoals.find((g: any) => g.goal_id === goal.goal_id)
+                      const allGoals = await fetchGoals(session)
+                      const fullGoal = allGoals.find((g: GoalResponse) => g.goal_id === goal.goal_id)
                         if (fullGoal) {
                           setGoalDetails({
                             estimated_cost: fullGoal.estimated_cost,
                             target_date: fullGoal.target_date,
                           })
-                        }
                       }
                     } catch (err) {
                       // Silently fail - we'll use calculated values

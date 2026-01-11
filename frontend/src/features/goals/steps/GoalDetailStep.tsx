@@ -1,31 +1,12 @@
 import { useState, useEffect } from 'react'
-
-type GoalCatalogItem = {
-  goal_category: string
-  goal_name: string
-  default_horizon: string
-  policy_linked_txn_type: string
-  is_mandatory_flag: boolean
-  suggested_min_amount_formula: string | null
-  display_order: number
-}
-
-type SelectedGoal = {
-  goal_category: string
-  goal_name: string
-  estimated_cost: number
-  target_date: string | null
-  current_savings: number
-  importance: number
-  notes: string | null
-}
+import type { GoalDetailRequest, GoalCatalogItem } from '../../../types/goals'
 
 type Props = {
-  goal: SelectedGoal
+  goal: GoalDetailRequest
   catalogItem: GoalCatalogItem | undefined
   currentIndex: number
   totalGoals: number
-  onSubmit: (goal: SelectedGoal) => void
+  onSubmit: (goal: GoalDetailRequest) => void
   onBack: () => void
 }
 
@@ -37,7 +18,7 @@ export function GoalDetailStep({
   onSubmit,
   onBack,
 }: Props) {
-  const [formData, setFormData] = useState<SelectedGoal>(goal)
+  const [formData, setFormData] = useState<GoalDetailRequest>(goal)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -174,6 +155,58 @@ export function GoalDetailStep({
           onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })}
           placeholder="Add any additional notes about this goal..."
         />
+      </div>
+
+      <div className="form-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={formData.is_must_have}
+            onChange={(e) => setFormData({ ...formData, is_must_have: e.target.checked })}
+          />
+          <span>This is a must-have goal (non-negotiable)</span>
+        </label>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="timeline_flexibility">Timeline Flexibility</label>
+        <select
+          id="timeline_flexibility"
+          className="input-field"
+          value={formData.timeline_flexibility ?? 'somewhat_flexible'}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              timeline_flexibility: e.target.value as GoalDetailRequest['timeline_flexibility'],
+            })
+          }
+        >
+          <option value="rigid">Rigid (must meet deadline)</option>
+          <option value="somewhat_flexible">Somewhat Flexible</option>
+          <option value="flexible">Flexible (can adjust timeline)</option>
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="risk_profile_for_goal">Risk Profile for This Goal</label>
+        <select
+          id="risk_profile_for_goal"
+          className="input-field"
+          value={formData.risk_profile_for_goal ?? ''}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              risk_profile_for_goal: e.target.value
+                ? (e.target.value as GoalDetailRequest['risk_profile_for_goal'])
+                : null,
+            })
+          }
+        >
+          <option value="">Use overall profile</option>
+          <option value="conservative">Conservative</option>
+          <option value="balanced">Balanced</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
       </div>
 
       <div className="form-actions">

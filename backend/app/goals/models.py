@@ -1,10 +1,15 @@
 """Pydantic models for Goals API."""
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
+
+
+RiskProfile = Literal["conservative", "balanced", "aggressive"]
+TimelineFlexibility = Literal["rigid", "somewhat_flexible", "flexible"]
+ReviewFrequency = Literal["monthly", "quarterly", "yearly"]
 
 
 class LifeContextRequest(BaseModel):
@@ -23,7 +28,37 @@ class LifeContextRequest(BaseModel):
         ..., description="Income stability: very_stable, stable, variable"
     )
     region_code: str = Field(..., description="Region code (e.g., IN-KA, IN-TG)")
-    emergency_opt_out: bool = Field(default=False, description="Opt out of emergency fund goal")
+    emergency_opt_out: bool = Field(
+        default=False, description="Opt out of emergency fund goal"
+    )
+
+    # Financial capacity (user-input or inferred)
+    monthly_investible_capacity: float | None = Field(
+        default=None,
+        ge=0,
+        description="Estimated monthly amount available for goals after expenses & EMIs",
+    )
+    total_monthly_emi_obligations: float | None = Field(
+        default=None,
+        ge=0,
+        description="Approximate total of EMIs per month (loans, credit cards, etc.)",
+    )
+
+    # Overall risk & behavior preferences
+    risk_profile_overall: RiskProfile | None = Field(
+        default=None,
+        description="Overall risk profile: conservative, balanced, aggressive",
+    )
+    review_frequency: ReviewFrequency | None = Field(
+        default="quarterly", description="How often user wants to review goals"
+    )
+    notify_on_drift: bool = Field(
+        default=True, description="Alert user when they fall behind the goal plan"
+    )
+    auto_adjust_on_income_change: bool = Field(
+        default=False,
+        description="Auto-suggest increasing contributions when income increases",
+    )
 
     @field_validator("age_band")
     @classmethod
@@ -72,6 +107,20 @@ class GoalDetailRequest(BaseModel):
     current_savings: float = Field(default=0.0, ge=0, description="Current savings amount")
     importance: int = Field(..., ge=1, le=5, description="Importance rating (1-5)")
     notes: str | None = Field(None, description="Optional notes")
+
+    # Per-goal risk and flexibility
+    risk_profile_for_goal: RiskProfile | None = Field(
+        default=None,
+        description="Risk profile for this specific goal (if different from overall)",
+    )
+    is_must_have: bool = Field(
+        default=True,
+        description="True if this is a non-negotiable goal vs good-to-have",
+    )
+    timeline_flexibility: TimelineFlexibility | None = Field(
+        default="somewhat_flexible",
+        description="Flexibility of the target date for this goal",
+    )
 
 
 class GoalsSubmitRequest(BaseModel):
@@ -128,6 +177,9 @@ class GoalUpdateRequest(BaseModel):
     current_savings: float | None = Field(None, ge=0)
     importance: int | None = Field(None, ge=1, le=5)
     notes: str | None = None
+    is_must_have: bool | None = None
+    timeline_flexibility: TimelineFlexibility | None = None
+    risk_profile_for_goal: RiskProfile | None = None
 
 
 class GoalProgressItem(BaseModel):

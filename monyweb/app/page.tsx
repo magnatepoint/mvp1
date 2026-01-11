@@ -7,11 +7,13 @@ import { MolyConsole } from './features/molyconsole/MolyConsole'
 import { SpendSenseScreen } from './features/spendsense/SpendSenseScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { GoalCompassScreen } from './features/goalcompass/GoalCompassScreen'
+import { BudgetPilotScreen } from './features/budgetpilot/BudgetPilotScreen'
+import { MoneyMomentsScreen } from './features/moneymoments/MoneyMomentsScreen'
 import { ThemeSwitcher } from './components/ThemeSwitcher'
 
 export default function Home() {
   const { user, session, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth()
-  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'goalcompass' | 'settings'>('console')
+  const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'goalcompass' | 'budgetpilot' | 'moneymoments' | 'settings'>('console')
   const [navOpen, setNavOpen] = useState(false)
 
   const handleSignIn = async (email: string, password: string) => {
@@ -59,7 +61,7 @@ export default function Home() {
           <div>
             <p className="eyebrow">Monytix</p>
             <h2 className="top-bar__title">
-              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : activeView === 'goalcompass' ? 'GoalCompass' : 'Settings'}
+              {activeView === 'console' ? 'MolyConsole' : activeView === 'spendsense' ? 'SpendSense' : activeView === 'goalcompass' ? 'GoalCompass' : activeView === 'budgetpilot' ? 'BudgetPilot' : activeView === 'moneymoments' ? 'MoneyMoments' : 'Settings'}
             </h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -76,6 +78,10 @@ export default function Home() {
             <SpendSenseScreen session={session} />
           ) : activeView === 'goalcompass' ? (
             <GoalCompassScreen session={session} />
+          ) : activeView === 'budgetpilot' ? (
+            <BudgetPilotScreen session={session} />
+          ) : activeView === 'moneymoments' ? (
+            <MoneyMomentsScreen session={session} />
           ) : (
             <SettingsScreen session={session} />
           )}
@@ -118,6 +124,28 @@ export default function Home() {
                   }}
                 >
                   🧭 GoalCompass
+                </button>
+              </li>
+              <li>
+                <button
+                  className={activeView === 'budgetpilot' ? 'nav-link nav-link--active' : 'nav-link'}
+                  onClick={() => {
+                    setActiveView('budgetpilot')
+                    setNavOpen(false)
+                  }}
+                >
+                  ✈️ BudgetPilot
+                </button>
+              </li>
+              <li>
+                <button
+                  className={activeView === 'moneymoments' ? 'nav-link nav-link--active' : 'nav-link'}
+                  onClick={() => {
+                    setActiveView('moneymoments')
+                    setNavOpen(false)
+                  }}
+                >
+                  💬 MoneyMoments
                 </button>
               </li>
               <li>

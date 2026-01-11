@@ -128,8 +128,9 @@ class SpendSenseService:
                     user_id,
                     month,
                 )
-            except asyncpg.PostgresError:
+            except asyncpg.PostgresError as exc:
                 # Materialized view doesn't exist, compute categories directly
+                logger.debug("Materialized view mv_spendsense_dashboard_user_month_category not found, using direct query: %s", exc)
                 categories = await self._pool.fetch(
                     """
                     SELECT 
@@ -594,26 +595,26 @@ class SpendSenseService:
         user_id: str,
         filename: str,
         file_bytes: bytes,
-        source_type: SourceType = SourceType.FILE,
+        source_type: str = SourceType.FILE,
         pdf_password: str | None = None,
     ) -> UploadBatch:
         if not filename:
             raise SpendSenseParseError("Filename is required")
 
         async with self._pool.acquire() as conn:
-            batch_id = await conn.fetchval(
+            row = await conn.fetchrow(
                 """
                 INSERT INTO spendsense.upload_batch (user_id, source_type, file_name, status)
                 VALUES ($1, $2, $3, 'received')
-                RETURNING upload_id
+                RETURNING upload_id, user_id, source_type, status, received_at
                 """,
                 user_id,
-                source_type.value,
+                source_type,  # SourceType is already a string, not an enum
                 filename,
             )
 
         ingest_statement_file_task.delay(
-            batch_id=str(batch_id),
+            batch_id=str(row["upload_id"]),
             user_id=user_id,
             filename=filename,
             file_b64=base64.b64encode(file_bytes).decode("ascii"),
@@ -621,18 +622,17 @@ class SpendSenseService:
         )
 
         return UploadBatch(
-            batch_id=str(batch_id),
-            user_id=user_id,
-            source_type=source_type,
-            file_name=filename,
-            total_rows=0,
-            status="received",
+            upload_id=str(row["upload_id"]),
+            user_id=str(row["user_id"]),
+            source_type=str(row["source_type"]),
+            status=str(row["status"]),
+            created_at=row["received_at"],  # Map received_at to created_at for the model
         )
 
     async def get_batch_status(self, batch_id: str, user_id: str) -> UploadBatch | None:
         """Get the current status of an upload batch."""
         query = """
-        SELECT upload_id, user_id, source_type, file_name, status, total_records, parsed_records, error_json
+        SELECT upload_id, user_id, source_type, status, received_at
         FROM spendsense.upload_batch
         WHERE upload_id = $1 AND user_id = $2
         """
@@ -640,12 +640,11 @@ class SpendSenseService:
         if not row:
             return None
         return UploadBatch(
-            batch_id=str(row["upload_id"]),
+            upload_id=str(row["upload_id"]),
             user_id=str(row["user_id"]),
-            source_type=SourceType(row["source_type"]),
-            file_name=row["file_name"],
-            total_rows=row["total_records"] or 0,
-            status=row["status"],
+            source_type=str(row["source_type"]),  # source_type is already a string from DB
+            status=str(row["status"]),
+            created_at=row["received_at"],  # Map received_at to created_at for the model
         )
 
     async def list_transactions(
@@ -705,32 +704,32 @@ class SpendSenseService:
                     WHEN v.description ~* '^TO TRANSFER-UPI/DR/[^/]+/([^/]+)/' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^TO TRANSFER-UPI/DR/[^/]+/([^/]+)/'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     WHEN v.description ~* '^UPI-([^-]+)-' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^UPI-([^-]+)-'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     WHEN v.description ~* 'UPI/([^/]+)/' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, 'UPI/([^/]+)/'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     WHEN v.description ~* '^IMPS-[^-]+-([^-]+)-' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^IMPS-[^-]+-([^-]+)-'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
-                    WHEN v.description ~* '(NEFT|NEFT)[-/]([^-/\s]+)' THEN
+                    WHEN v.description ~* '(NEFT|NEFT)[-/]([^-/\\s]+)' THEN
                         INITCAP(REGEXP_REPLACE(
-                            (regexp_match(v.description, '(NEFT|NEFT)[-/]([^-/\s]+)'))[2],
-                            '\s+', ' ', 'g'
+                            (regexp_match(v.description, '(NEFT|NEFT)[-/]([^-/\\s]+)'))[2],
+                            '\\s+', ' ', 'g'
                         ))
-                    WHEN v.description ~* '^ACH\s+([^-/]+)' THEN
+                    WHEN v.description ~* '^ACH\\s+([^-/]+)' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^ACH\s+([^-/]+)'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     -- For simple descriptions, use the description itself (limited length)
                     WHEN v.description IS NOT NULL 
@@ -738,7 +737,7 @@ class SpendSenseService:
                          AND LENGTH(TRIM(v.description)) <= 50
                          AND LOWER(TRIM(v.description)) NOT IN ('test transaction - today', 'salary', 'payment', 'transfer', 'debit', 'credit')
                          AND v.description !~* '^\d+$'
-                    THEN INITCAP(REGEXP_REPLACE(TRIM(v.description), '\s+', ' ', 'g'))
+                    THEN INITCAP(REGEXP_REPLACE(TRIM(v.description), '\\s+', ' ', 'g'))
                     -- Fallback to bank name if description is empty
                     WHEN v.bank_code IS NOT NULL THEN
                         INITCAP(REPLACE(v.bank_code, '_', ' '))
@@ -1007,32 +1006,32 @@ class SpendSenseService:
                     WHEN v.description ~* '^TO TRANSFER-UPI/DR/[^/]+/([^/]+)/' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^TO TRANSFER-UPI/DR/[^/]+/([^/]+)/'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     WHEN v.description ~* '^UPI-([^-]+)-' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^UPI-([^-]+)-'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     WHEN v.description ~* 'UPI/([^/]+)/' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, 'UPI/([^/]+)/'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     WHEN v.description ~* '^IMPS-[^-]+-([^-]+)-' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^IMPS-[^-]+-([^-]+)-'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
-                    WHEN v.description ~* '(NEFT|NEFT)[-/]([^-/\s]+)' THEN
+                    WHEN v.description ~* '(NEFT|NEFT)[-/]([^-/\\s]+)' THEN
                         INITCAP(REGEXP_REPLACE(
-                            (regexp_match(v.description, '(NEFT|NEFT)[-/]([^-/\s]+)'))[2],
-                            '\s+', ' ', 'g'
+                            (regexp_match(v.description, '(NEFT|NEFT)[-/]([^-/\\s]+)'))[2],
+                            '\\s+', ' ', 'g'
                         ))
-                    WHEN v.description ~* '^ACH\s+([^-/]+)' THEN
+                    WHEN v.description ~* '^ACH\\s+([^-/]+)' THEN
                         INITCAP(REGEXP_REPLACE(
                             (regexp_match(v.description, '^ACH\s+([^-/]+)'))[1],
-                            '\s+', ' ', 'g'
+                            '\\s+', ' ', 'g'
                         ))
                     -- For simple descriptions, use the description itself (limited length)
                     WHEN v.description IS NOT NULL 
@@ -1040,7 +1039,7 @@ class SpendSenseService:
                          AND LENGTH(TRIM(v.description)) <= 50
                          AND LOWER(TRIM(v.description)) NOT IN ('test transaction - today', 'salary', 'payment', 'transfer', 'debit', 'credit')
                          AND v.description !~* '^\d+$'
-                    THEN INITCAP(REGEXP_REPLACE(TRIM(v.description), '\s+', ' ', 'g'))
+                    THEN INITCAP(REGEXP_REPLACE(TRIM(v.description), '\\s+', ' ', 'g'))
                     -- Fallback to bank name if description is empty
                     WHEN v.bank_code IS NOT NULL THEN
                         INITCAP(REPLACE(v.bank_code, '_', ' '))

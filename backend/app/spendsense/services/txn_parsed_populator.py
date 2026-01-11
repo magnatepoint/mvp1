@@ -85,7 +85,7 @@ class TransactionParser:
         description = txn.get('description', '') or ''
         bank_code_raw = txn.get('bank_code') or ''
         # Normalize bank_code: handle both "FEDERAL" and "federal_bank" formats
-        bank_code = bank_code_raw.upper()
+        bank_code = (bank_code_raw or '').upper()
         if 'FEDERAL' in bank_code:
             bank_code = 'FEDERAL'  # Normalize to FEDERAL for consistency
         direction_raw = txn.get('direction', 'debit')
@@ -129,6 +129,8 @@ class TransactionParser:
     
     def _detect_channel(self, description: str) -> str:
         """Detect transaction channel from description"""
+        if not description:
+            return 'OTHER'
         desc_upper = description.upper()
         
         for channel, patterns in self.CHANNEL_PATTERNS.items():
@@ -140,6 +142,8 @@ class TransactionParser:
     
     def _determine_direction(self, description: str, direction_raw: str, channel: str) -> str:
         """Determine transaction direction (IN/OUT/REV/INTERNAL)"""
+        if not description:
+            return direction_raw or 'debit'
         desc_upper = description.upper()
         
         # Federal Bank format: IN/<rrn>/... or OUT/<rrn>/...
@@ -452,7 +456,9 @@ class TransactionParser:
         """Extract MCC (Merchant Category Code) if available"""
         # Federal Bank: UPIOUT/<rrn>/<name> UPI or UPIOUT/<rrn>/<vpa>/UPI/<mcc> or UPIOUT/<rrn>/<name>/<mcc>
         # Also: IN/<rrn>/<name> OTHER or OUT/<rrn>/<name> UPI (MCC might be in a different position)
-        if 'FEDERAL' in bank.upper():
+        if not desc or not bank:
+            return None
+        if 'FEDERAL' in (bank or '').upper():
             # Pattern 1: /UPI/<4-digit-mcc> at end (with /UPI/ separator)
             match = re.search(r'/UPI/(\d{4})$', desc, re.IGNORECASE)
             if match:
@@ -464,7 +470,7 @@ class TransactionParser:
                 return match.group(1)
             
             # Pattern 3: UPIOUT/<rrn>/<name>/<mcc> (without /UPI/, mcc is last 4-digit part)
-            if desc.upper().startswith('UPIOUT/'):
+            if desc and desc.upper().startswith('UPIOUT/'):
                 parts = [p.strip() for p in desc.split('/') if p.strip()]
                 if len(parts) >= 4:
                     # Check if last part is a 4-digit MCC
@@ -476,7 +482,7 @@ class TransactionParser:
             
             # Pattern 4: IN/<rrn>/<name> OTHER or OUT/<rrn>/<name> UPI
             # For this format, MCC might not be present, but if there's a 4-digit number after the name, it could be MCC
-            if desc.upper().startswith(('IN/', 'OUT/')):
+            if desc and desc.upper().startswith(('IN/', 'OUT/')):
                 parts = [p.strip() for p in desc.split('/') if p.strip()]
                 if len(parts) >= 3:
                     # Check if there's a 4-digit number in the last part (after removing UPI/OTHER)
@@ -575,16 +581,18 @@ async def populate_txn_parsed_from_fact(conn, batch_id: str = None):
     federal_count = 0
     for row in rows:
         txn = dict(row)
-        bank_code_raw = txn.get('bank_code', '')
-        if 'FEDERAL' in bank_code_raw.upper():
+        bank_code_raw = txn.get('bank_code') or ''
+        # Safely handle None case
+        bank_code_upper = (bank_code_raw or '').upper()
+        if 'FEDERAL' in bank_code_upper:
             federal_count += 1
             logger.debug(f"Parsing Federal Bank txn: {txn.get('description', '')[:50]}... (bank_code: {bank_code_raw})")
         try:
             parsed = parse_transaction_metadata(txn)
             # Log if counterparty_name was extracted for Federal Bank
-            if 'FEDERAL' in bank_code_raw.upper() and parsed.get('counterparty_name'):
+            if 'FEDERAL' in bank_code_upper and parsed.get('counterparty_name'):
                 logger.info(f"✅ Extracted counterparty_name '{parsed.get('counterparty_name')}' from: {txn.get('description', '')[:50]}")
-            elif 'FEDERAL' in bank_code_raw.upper() and not parsed.get('counterparty_name'):
+            elif 'FEDERAL' in bank_code_upper and not parsed.get('counterparty_name'):
                 logger.warning(f"⚠️  No counterparty_name extracted from Federal Bank txn: {txn.get('description', '')[:50]}")
             parsed_records.append(parsed)
         except Exception as e:

@@ -268,6 +268,17 @@ async def _ingest(
         logger.info(f"Enriching transactions with categories for batch {batch_id}")
         try:
             enriched_count = await enrich_transactions(conn, user_id, batch_id)
+            
+            # Process enriched transactions through GoalRealtimeEngine
+            if enriched_count > 0:
+                try:
+                    from app.goals.transaction_hook import process_transactions_for_goals
+                    await process_transactions_for_goals(conn, user_id, batch_id)
+                except Exception as goal_error:
+                    logger.warning(
+                        f"Failed to process transactions for goals (non-fatal): {goal_error}",
+                        exc_info=True,
+                    )
             logger.info(f"Enriched {enriched_count} transactions for batch {batch_id}")
             if enriched_count == 0:
                 logger.warning(f"No transactions were enriched for batch {batch_id}. This may indicate no parsed transactions or enrichment rule issues.")

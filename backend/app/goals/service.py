@@ -7,6 +7,9 @@ from uuid import UUID
 
 import asyncpg
 
+from .goal_planner import GoalPlanner
+from .goals_repository import GoalsRepository
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,8 +30,11 @@ class GoalsService:
                 INSERT INTO goal.user_life_context (
                     user_id, age_band, dependents_spouse, dependents_children_count,
                     dependents_parents_care, housing, employment, income_regularity,
-                    region_code, emergency_opt_out
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    region_code, emergency_opt_out,
+                    monthly_investible_capacity, total_monthly_emi_obligations,
+                    risk_profile_overall, review_frequency, notify_on_drift,
+                    auto_adjust_on_income_change
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                 ON CONFLICT (user_id) DO UPDATE SET
                     age_band = EXCLUDED.age_band,
                     dependents_spouse = EXCLUDED.dependents_spouse,
@@ -39,6 +45,12 @@ class GoalsService:
                     income_regularity = EXCLUDED.income_regularity,
                     region_code = EXCLUDED.region_code,
                     emergency_opt_out = EXCLUDED.emergency_opt_out,
+                    monthly_investible_capacity = EXCLUDED.monthly_investible_capacity,
+                    total_monthly_emi_obligations = EXCLUDED.total_monthly_emi_obligations,
+                    risk_profile_overall = EXCLUDED.risk_profile_overall,
+                    review_frequency = EXCLUDED.review_frequency,
+                    notify_on_drift = EXCLUDED.notify_on_drift,
+                    auto_adjust_on_income_change = EXCLUDED.auto_adjust_on_income_change,
                     updated_at = NOW()
                 """,
                 user_id,
@@ -50,7 +62,13 @@ class GoalsService:
                 context["employment"],
                 context["income_regularity"],
                 context["region_code"],
-                context["emergency_opt_out"],
+                context.get("emergency_opt_out", False),
+                context.get("monthly_investible_capacity"),
+                context.get("total_monthly_emi_obligations"),
+                context.get("risk_profile_overall"),
+                context.get("review_frequency", "quarterly"),
+                context.get("notify_on_drift", True),
+                context.get("auto_adjust_on_income_change", False),
             )
             return {"status": "saved"}
 
@@ -61,7 +79,10 @@ class GoalsService:
                 """
                 SELECT age_band, dependents_spouse, dependents_children_count,
                        dependents_parents_care, housing, employment, income_regularity,
-                       region_code, emergency_opt_out
+                       region_code, emergency_opt_out,
+                       monthly_investible_capacity, total_monthly_emi_obligations,
+                       risk_profile_overall, review_frequency, notify_on_drift,
+                       auto_adjust_on_income_change
                 FROM goal.user_life_context
                 WHERE user_id = $1
                 """,
@@ -88,10 +109,13 @@ class GoalsService:
     async def create_goals(
         self, user_id: UUID, goals: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Create multiple goals for a user."""
+        """Create multiple goals for a user with enhanced prioritization."""
         created_goals = []
         async with self.pool.acquire() as conn:
             async with conn.transaction():
+                repo = GoalsRepository(conn)
+                goal_objects = []
+
                 for goal_data in goals:
                     # Derive goal_type from default_horizon if not provided
                     goal_type = goal_data.get("goal_type")
@@ -140,57 +164,52 @@ class GoalsService:
                     estimated_cost = goal_data["estimated_cost"]
                     status = "completed" if current_savings >= estimated_cost else "active"
 
-                    # Insert goal (triggers will auto-compute linked_txn_type and priority_rank)
-                    goal_id = await conn.fetchval(
-                        """
-                        INSERT INTO goal.user_goals_master (
-                            user_id, goal_category, goal_name, goal_type,
-                            estimated_cost, target_date, current_savings,
-                            importance, status, notes
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                        RETURNING goal_id
-                        """,
+                    # Prepare goal data with enhanced fields
+                    goal_create_data = {
+                        "goal_category": goal_data["goal_category"],
+                        "goal_name": goal_data["goal_name"],
+                        "goal_type": goal_type,
+                        "estimated_cost": estimated_cost,
+                        "target_date": target_date,
+                        "current_savings": current_savings,
+                        "importance": goal_data.get("importance"),
+                        "status": status,
+                        "notes": goal_data.get("notes"),
+                        "is_must_have": goal_data.get("is_must_have", True),
+                        "timeline_flexibility": goal_data.get("timeline_flexibility"),
+                        "risk_profile_for_goal": goal_data.get("risk_profile_for_goal"),
+                    }
+
+                    # Create goal using repository
+                    created_goal = await repo.create_goal(user_id, goal_create_data)
+                    goal_objects.append(created_goal)
+
+                # Use GoalPlanner to assign priority ranks
+                goal_dicts = [
+                    {
+                        "goal_id": g["goal_id"],
+                        "importance": g.get("importance"),
+                        "is_must_have": g.get("is_must_have", True),
+                        "timeline_flexibility": g.get("timeline_flexibility"),
+                        "target_date": g.get("target_date"),
+                    }
+                    for g in goal_objects
+                ]
+                GoalPlanner.assign_priority_ranks(goal_dicts)
+
+                # Update priority ranks in database
+                for goal_dict in goal_dicts:
+                    await repo.update_goal(
                         user_id,
-                        goal_data["goal_category"],
-                        goal_data["goal_name"],
-                        goal_type,
-                        estimated_cost,
-                        target_date,
-                        current_savings,
-                        goal_data.get("importance"),
-                        status,
-                        goal_data.get("notes"),
+                        UUID(str(goal_dict["goal_id"])),
+                        {"priority_rank": goal_dict["priority_rank"]},
                     )
-
-                    # Get priority_rank after insert (computed by trigger)
-                    priority_rank = await conn.fetchval(
-                        """
-                        SELECT priority_rank
-                        FROM goal.user_goals_master
-                        WHERE goal_id = $1
-                        """,
-                        goal_id,
-                    )
-
                     created_goals.append(
-                        {"goal_id": str(goal_id), "priority_rank": priority_rank}
+                        {
+                            "goal_id": str(goal_dict["goal_id"]),
+                            "priority_rank": goal_dict["priority_rank"],
+                        }
                     )
-
-                # Recompute all priority ranks for user (in case of ties)
-                await self._recompute_priority_ranks(conn, user_id)
-
-                # Update priority_ranks in created_goals
-                for goal_info in created_goals:
-                    goal_id = UUID(goal_info["goal_id"])
-                    priority_rank = await conn.fetchval(
-                        """
-                        SELECT priority_rank
-                        FROM goal.user_goals_master
-                        WHERE goal_id = $1
-                        """,
-                        goal_id,
-                    )
-                    goal_info["priority_rank"] = priority_rank
 
         return created_goals
 
@@ -222,125 +241,128 @@ class GoalsService:
     async def get_user_goals(self, user_id: UUID) -> list[dict[str, Any]]:
         """Get all active goals for a user."""
         async with self.pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT goal_id, goal_category, goal_name, goal_type, linked_txn_type,
-                       estimated_cost, target_date, current_savings, importance,
-                       priority_rank, status, notes, created_at, updated_at
-                FROM goal.user_goals_master
-                WHERE user_id = $1 AND status != 'cancelled'
-                ORDER BY priority_rank ASC NULLS LAST, target_date ASC NULLS LAST
-                """,
-                user_id,
-            )
-            return [
-                {
-                    **dict(row),
-                    "goal_id": str(row["goal_id"]),
-                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+            # Check if enhanced columns exist
+            try:
+                rows = await conn.fetch(
+                    """
+                    SELECT goal_id, goal_category, goal_name, goal_type, linked_txn_type,
+                           estimated_cost, target_date, current_savings, importance,
+                           priority_rank, status, notes, is_must_have, timeline_flexibility,
+                           risk_profile_for_goal, created_at, updated_at
+                    FROM goal.user_goals_master
+                    WHERE user_id = $1 AND status != 'cancelled'
+                    ORDER BY priority_rank ASC NULLS LAST, target_date ASC NULLS LAST
+                    """,
+                    user_id,
+                )
+            except Exception:
+                # Fallback if enhanced columns don't exist yet
+                rows = await conn.fetch(
+                    """
+                    SELECT goal_id, goal_category, goal_name, goal_type, linked_txn_type,
+                           estimated_cost, target_date, current_savings, importance,
+                           priority_rank, status, notes, created_at, updated_at
+                    FROM goal.user_goals_master
+                    WHERE user_id = $1 AND status != 'cancelled'
+                    ORDER BY priority_rank ASC NULLS LAST, target_date ASC NULLS LAST
+                    """,
+                    user_id,
+                )
+            
+            result = []
+            for row in rows:
+                goal_dict = dict(row)
+                # Add defaults for missing columns if they were not selected in fallback
+                if "is_must_have" not in goal_dict:
+                    goal_dict["is_must_have"] = True
+                if "timeline_flexibility" not in goal_dict:
+                    goal_dict["timeline_flexibility"] = None
+                if "risk_profile_for_goal" not in goal_dict:
+                    goal_dict["risk_profile_for_goal"] = None
+                
+                result.append({
+                    **goal_dict,
+                    "goal_id": str(goal_dict["goal_id"]),
+                    "created_at": goal_dict["created_at"].isoformat() if goal_dict.get("created_at") else None,
+                    "updated_at": goal_dict["updated_at"].isoformat() if goal_dict.get("updated_at") else None,
+                })
+            
+            return result
+
+    async def get_user_goal(self, user_id: UUID, goal_id: UUID) -> dict[str, Any] | None:
+        """Get a single goal by ID for a user."""
+        async with self.pool.acquire() as conn:
+            repo = GoalsRepository(conn)
+            goal = await repo.get_goal(user_id, goal_id)
+            if goal:
+                return {
+                    **goal,
+                    "goal_id": str(goal["goal_id"]),
+                    "created_at": goal["created_at"].isoformat() if goal.get("created_at") else None,
+                    "updated_at": goal["updated_at"].isoformat() if goal.get("updated_at") else None,
                 }
-                for row in rows
-            ]
+            return None
 
     async def update_goal(
         self, user_id: UUID, goal_id: UUID, updates: dict[str, Any]
     ) -> dict[str, Any]:
-        """Update a goal."""
+        """Update a goal using repository."""
         async with self.pool.acquire() as conn:
+            repo = GoalsRepository(conn)
+
             # Check ownership
-            owner = await conn.fetchval(
-                """
-                SELECT user_id FROM goal.user_goals_master WHERE goal_id = $1
-                """,
-                goal_id,
-            )
-            if owner != user_id:
+            existing_goal = await repo.get_goal(user_id, goal_id)
+            if not existing_goal:
                 raise ValueError("Goal not found or access denied")
-
-            # Build update query dynamically
-            update_fields = []
-            params = []
-            param_idx = 1
-
-            if "estimated_cost" in updates:
-                update_fields.append(f"estimated_cost = ${param_idx}")
-                params.append(updates["estimated_cost"])
-                param_idx += 1
-
-            if "target_date" in updates:
-                update_fields.append(f"target_date = ${param_idx}")
-                params.append(updates["target_date"])
-                param_idx += 1
-
-            if "current_savings" in updates:
-                update_fields.append(f"current_savings = ${param_idx}")
-                params.append(updates["current_savings"])
-                param_idx += 1
-
-            if "importance" in updates:
-                update_fields.append(f"importance = ${param_idx}")
-                params.append(updates["importance"])
-                param_idx += 1
-
-            if "notes" in updates:
-                update_fields.append(f"notes = ${param_idx}")
-                params.append(updates["notes"])
-                param_idx += 1
-
-            if not update_fields:
-                raise ValueError("No fields to update")
 
             # Check if goal should be marked as completed
             if "current_savings" in updates or "estimated_cost" in updates:
-                # Get current values
-                current = await conn.fetchrow(
-                    """
-                    SELECT current_savings, estimated_cost
-                    FROM goal.user_goals_master
-                    WHERE goal_id = $1
-                    """,
-                    goal_id,
-                )
-                if current:
-                    new_savings = updates.get("current_savings", current["current_savings"])
-                    new_cost = updates.get("estimated_cost", current["estimated_cost"])
-                    if new_savings >= new_cost:
-                        update_fields.append("status = 'completed'")
-                    elif current["current_savings"] >= current["estimated_cost"]:
-                        # Was completed, but now might not be
-                        update_fields.append("status = 'active'")
+                new_savings = updates.get("current_savings", existing_goal.get("current_savings", 0.0))
+                new_cost = updates.get("estimated_cost", existing_goal.get("estimated_cost", 0.0))
+                if new_savings >= new_cost:
+                    updates["status"] = "completed"
+                elif existing_goal.get("current_savings", 0.0) >= existing_goal.get("estimated_cost", 0.0):
+                    # Was completed, but now might not be
+                    updates["status"] = "active"
 
-            params.append(goal_id)
-            await conn.execute(
-                f"""
-                UPDATE goal.user_goals_master
-                SET {', '.join(update_fields)}, updated_at = NOW()
-                WHERE goal_id = ${param_idx}
-                """,
-                *params,
-            )
+            # Update goal
+            updated_goal = await repo.update_goal(user_id, goal_id, updates)
+            if not updated_goal:
+                raise ValueError("Failed to update goal")
 
-            # Recompute priority ranks
-            await self._recompute_priority_ranks(conn, user_id)
+            # Recompute priority ranks if importance or other priority-affecting fields changed
+            if any(key in updates for key in ["importance", "is_must_have", "timeline_flexibility"]):
+                all_goals = await repo.list_goals(user_id)
+                goal_dicts = [
+                    {
+                        "goal_id": g["goal_id"],
+                        "importance": g.get("importance"),
+                        "is_must_have": g.get("is_must_have", True),
+                        "timeline_flexibility": g.get("timeline_flexibility"),
+                        "target_date": g.get("target_date"),
+                    }
+                    for g in all_goals
+                ]
+                GoalPlanner.assign_priority_ranks(goal_dicts)
+
+                # Update priority ranks
+                for goal_dict in goal_dicts:
+                    await repo.update_goal(
+                        user_id,
+                        UUID(str(goal_dict["goal_id"])),
+                        {"priority_rank": goal_dict["priority_rank"]},
+                    )
 
             # Return updated goal
-            row = await conn.fetchrow(
-                """
-                SELECT goal_id, goal_category, goal_name, goal_type, linked_txn_type,
-                       estimated_cost, target_date, current_savings, importance,
-                       priority_rank, status, notes, created_at, updated_at
-                FROM goal.user_goals_master
-                WHERE goal_id = $1
-                """,
-                goal_id,
-            )
-            return {
-                **dict(row),
-                "goal_id": str(row["goal_id"]),
-                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
-            }
+            final_goal = await repo.get_goal(user_id, goal_id)
+            if final_goal:
+                return {
+                    **final_goal,
+                    "goal_id": str(final_goal["goal_id"]),
+                    "created_at": final_goal["created_at"].isoformat() if final_goal.get("created_at") else None,
+                    "updated_at": final_goal["updated_at"].isoformat() if final_goal.get("updated_at") else None,
+                }
+            raise ValueError("Failed to retrieve updated goal")
 
     async def delete_goal(self, user_id: UUID, goal_id: UUID) -> dict[str, Any]:
         """Soft delete a goal (set status to cancelled)."""
@@ -414,10 +436,33 @@ class GoalsService:
             return unique_recommended
 
     async def get_goals_progress(self, user_id: UUID) -> list[dict[str, Any]]:
-        """Get progress for all active goals from latest snapshot."""
+        """Get progress for all active goals with enhanced projections using GoalPlanner."""
         async with self.pool.acquire() as conn:
             try:
-                # Check if goalcompass schema exists
+                # Get life context for planning
+                context = await self.get_life_context(user_id)
+                if not context:
+                    # Use default context if not available
+                    context = {
+                        "monthly_investible_capacity": 10000.0,
+                        "risk_profile_overall": "balanced",
+                    }
+
+                # Get all active goals
+                repo = GoalsRepository(conn)
+                goals = await repo.list_goals(user_id)
+                active_goals = [g for g in goals if g.get("status") == "active"]
+
+                if not active_goals:
+                    return []
+
+                # Use GoalPlanner to build monthly plan and get projections
+                planned = GoalPlanner.build_monthly_plan(context, active_goals)
+
+                # Create a mapping of goal_id to planned goal
+                planned_map = {pg.goal_id: pg for pg in planned}
+
+                # Check if goalcompass schema exists for milestones
                 schema_exists = await conn.fetchval(
                     """
                     SELECT EXISTS (
@@ -427,143 +472,28 @@ class GoalsService:
                     """
                 )
                 
-                # Try to use goalcompass snapshot if available, otherwise fall back to basic goal data
-                if schema_exists:
-                    try:
-                        # Check if goal_compass_snapshot table exists
-                        table_exists = await conn.fetchval(
-                            """
-                            SELECT EXISTS (
-                                SELECT 1 FROM information_schema.tables 
-                                WHERE table_schema = 'goalcompass' 
-                                AND table_name = 'goal_compass_snapshot'
-                            )
-                            """
-                        )
-                        
-                        if table_exists:
-                            # Use goalcompass snapshot data
-                            rows = await conn.fetch(
-                                """
-                                SELECT 
-                                    g.goal_id,
-                                    g.goal_name,
-                                    CASE 
-                                        WHEN s.progress_pct IS NOT NULL THEN s.progress_pct
-                                        WHEN g.estimated_cost > 0 THEN (g.current_savings / g.estimated_cost * 100.0)
-                                        ELSE 0.0
-                                    END AS progress_pct,
-                                    COALESCE(s.progress_amount, g.current_savings, 0.0) AS current_savings_close,
-                                    CASE 
-                                        WHEN s.remaining_amount IS NOT NULL THEN s.remaining_amount
-                                        WHEN g.estimated_cost > 0 THEN GREATEST(0, g.estimated_cost - COALESCE(g.current_savings, 0.0))
-                                        ELSE g.estimated_cost
-                                    END AS remaining_amount,
-                                    CASE 
-                                        WHEN s.months_remaining IS NOT NULL AND s.months_remaining > 0 THEN
-                                            (CURRENT_DATE + (s.months_remaining || ' months')::INTERVAL)::DATE
-                                        WHEN g.target_date IS NOT NULL THEN g.target_date
-                                        ELSE NULL
-                                    END AS projected_completion_date
-                                FROM goal.user_goals_master g
-                                LEFT JOIN LATERAL (
-                                    SELECT 
-                                        progress_pct,
-                                        progress_amount,
-                                        remaining_amount,
-                                        months_remaining
-                                    FROM goalcompass.goal_compass_snapshot s
-                                    WHERE s.user_id = $1 AND s.goal_id = g.goal_id
-                                    ORDER BY s.month DESC
-                                    LIMIT 1
-                                ) s ON TRUE
-                                WHERE g.user_id = $1 
-                                  AND g.status = 'active'
-                                ORDER BY g.priority_rank ASC NULLS LAST
-                                """,
-                                user_id,
-                            )
-                        else:
-                            # Fall back to basic goal data
-                            rows = await conn.fetch(
-                                """
-                                SELECT 
-                                    g.goal_id,
-                                    g.goal_name,
-                                    CASE 
-                                        WHEN g.estimated_cost > 0 THEN (g.current_savings / g.estimated_cost * 100.0)
-                                        ELSE 0.0
-                                    END AS progress_pct,
-                                    COALESCE(g.current_savings, 0.0) AS current_savings_close,
-                                    CASE 
-                                        WHEN g.estimated_cost > 0 THEN GREATEST(0, g.estimated_cost - COALESCE(g.current_savings, 0.0))
-                                        ELSE g.estimated_cost
-                                    END AS remaining_amount,
-                                    g.target_date AS projected_completion_date
-                                FROM goal.user_goals_master g
-                                WHERE g.user_id = $1 
-                                  AND g.status = 'active'
-                                ORDER BY g.priority_rank ASC NULLS LAST
-                                """,
-                                user_id,
-                            )
-                    except Exception as schema_error:
-                        logger.warning(f"Error accessing goalcompass schema, falling back to basic goal data: {schema_error}")
-                        # Fall back to basic goal data
-                        rows = await conn.fetch(
-                            """
-                            SELECT 
-                                g.goal_id,
-                                g.goal_name,
-                                CASE 
-                                    WHEN g.estimated_cost > 0 THEN (g.current_savings / g.estimated_cost * 100.0)
-                                    ELSE 0.0
-                                END AS progress_pct,
-                                COALESCE(g.current_savings, 0.0) AS current_savings_close,
-                                CASE 
-                                    WHEN g.estimated_cost > 0 THEN GREATEST(0, g.estimated_cost - COALESCE(g.current_savings, 0.0))
-                                    ELSE g.estimated_cost
-                                END AS remaining_amount,
-                                g.target_date AS projected_completion_date
-                            FROM goal.user_goals_master g
-                            WHERE g.user_id = $1 
-                              AND g.status = 'active'
-                            ORDER BY g.priority_rank ASC NULLS LAST
-                            """,
-                            user_id,
-                        )
-                else:
-                    # Fall back to basic goal data if schema doesn't exist
-                    rows = await conn.fetch(
-                        """
-                        SELECT 
-                            g.goal_id,
-                            g.goal_name,
-                            CASE 
-                                WHEN g.estimated_cost > 0 THEN (g.current_savings / g.estimated_cost * 100.0)
-                                ELSE 0.0
-                            END AS progress_pct,
-                            COALESCE(g.current_savings, 0.0) AS current_savings_close,
-                            CASE 
-                                WHEN g.estimated_cost > 0 THEN GREATEST(0, g.estimated_cost - COALESCE(g.current_savings, 0.0))
-                                ELSE g.estimated_cost
-                            END AS remaining_amount,
-                            g.target_date AS projected_completion_date
-                        FROM goal.user_goals_master g
-                        WHERE g.user_id = $1 
-                          AND g.status = 'active'
-                        ORDER BY g.priority_rank ASC NULLS LAST
-                        """,
-                        user_id,
-                    )
-
-                # Get milestones for each goal (handle missing tables gracefully)
+                # Build progress items using planner projections
                 goal_progress = []
-                for row in rows:
-                    goal_id = row["goal_id"]
-                    milestones = []
-                    
-                    # Try to get milestones if goalcompass tables exist
+                for goal in active_goals:
+                    goal_id_str = str(goal["goal_id"])
+                    planned_goal = planned_map.get(goal_id_str)
+
+                    # Calculate progress using planner
+                    progress_pct = GoalPlanner.compute_progress_pct(goal)
+                    milestones = GoalPlanner.compute_milestones(progress_pct)
+
+                    # Use planner projection if available, otherwise use target_date
+                    projected_date = None
+                    if planned_goal and planned_goal.projected_completion_date:
+                        projected_date = planned_goal.projected_completion_date.isoformat()
+                    elif goal.get("target_date"):
+                        target_date = goal["target_date"]
+                        if isinstance(target_date, str):
+                            projected_date = target_date
+                        else:
+                            projected_date = target_date.isoformat()
+
+                    # Try to get milestones from goalcompass if available
                     if schema_exists:
                         try:
                             milestone_table_exists = await conn.fetchval(
@@ -588,27 +518,23 @@ class GoalsService:
                                     ORDER BY m.threshold_pct
                                     """,
                                     user_id,
-                                    goal_id,
+                                    UUID(goal_id_str),
                                 )
-                                milestones = [int(m["milestone_pct"]) for m in milestone_rows]
+                                if milestone_rows:
+                                    milestones = [int(m["milestone_pct"]) for m in milestone_rows]
                         except Exception as milestone_error:
-                            logger.debug(f"Could not fetch milestones for goal {goal_id}: {milestone_error}")
-                            milestones = []
-                    
-                    # Handle date serialization
-                    projected_date = None
-                    if row["projected_completion_date"]:
-                        if isinstance(row["projected_completion_date"], date):
-                            projected_date = row["projected_completion_date"].isoformat()
-                        else:
-                            projected_date = str(row["projected_completion_date"])
+                            logger.debug(f"Could not fetch milestones for goal {goal_id_str}: {milestone_error}")
+
+                    current_savings = goal.get("current_savings", 0.0)
+                    estimated_cost = goal.get("estimated_cost", 0.0)
+                    remaining = max(estimated_cost - current_savings, 0.0)
 
                     goal_progress.append({
-                        "goal_id": str(goal_id),
-                        "goal_name": row["goal_name"],
-                        "progress_pct": float(row["progress_pct"]),
-                        "current_savings_close": float(row["current_savings_close"]),
-                        "remaining_amount": float(row["remaining_amount"]),
+                        "goal_id": goal_id_str,
+                        "goal_name": goal.get("goal_name", ""),
+                        "progress_pct": progress_pct,
+                        "current_savings_close": float(current_savings),
+                        "remaining_amount": remaining,
                         "projected_completion_date": projected_date,
                         "milestones": milestones,
                     })

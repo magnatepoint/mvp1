@@ -1,0 +1,10 @@
+BEGIN;
+
+ALTER TABLE goal.user_goals_master
+  ADD COLUMN IF NOT EXISTS drift_amount NUMERIC(18,2),
+  ADD COLUMN IF NOT EXISTS drift_pct NUMERIC(5,2),
+  ADD COLUMN IF NOT EXISTS last_contribution_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_txn_id UUID;
+
+COMMIT;
+

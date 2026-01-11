@@ -1,49 +1,27 @@
 import { useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { env } from '../../env'
 import { LifeContextStep } from './steps/LifeContextStep'
 import { GoalSelectionStep } from './steps/GoalSelectionStep'
 import { GoalDetailStep } from './steps/GoalDetailStep'
 import { ReviewStep } from './steps/ReviewStep'
-import { CheckCircle2, Circle, ArrowRight, ArrowLeft } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import { useToast } from '../../components/Toast'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
+import {
+  fetchGoalCatalog,
+  fetchRecommendedGoals,
+  fetchLifeContext,
+  submitGoals,
+} from '../../api/goals'
+import type {
+  LifeContextRequest,
+  GoalCatalogItem,
+  GoalDetailRequest,
+} from '../../types/goals'
 import './GoalsStepper.css'
 
 type Props = {
   session: Session
-}
-
-type LifeContext = {
-  age_band: string
-  dependents_spouse: boolean
-  dependents_children_count: number
-  dependents_parents_care: boolean
-  housing: string
-  employment: string
-  income_regularity: string
-  region_code: string
-  emergency_opt_out: boolean
-}
-
-type GoalCatalogItem = {
-  goal_category: string
-  goal_name: string
-  default_horizon: string
-  policy_linked_txn_type: string
-  is_mandatory_flag: boolean
-  suggested_min_amount_formula: string | null
-  display_order: number
-}
-
-type SelectedGoal = {
-  goal_category: string
-  goal_name: string
-  estimated_cost: number
-  target_date: string | null
-  current_savings: number
-  importance: number
-  notes: string | null
 }
 
 const STEPS = [
@@ -56,10 +34,10 @@ const STEPS = [
 export function GoalsStepper({ session }: Props) {
   const { showToast } = useToast()
   const [currentStep, setCurrentStep] = useState(1)
-  const [lifeContext, setLifeContext] = useState<LifeContext | null>(null)
+  const [lifeContext, setLifeContext] = useState<LifeContextRequest | null>(null)
   const [goalCatalog, setGoalCatalog] = useState<GoalCatalogItem[]>([])
   const [recommendedGoals, setRecommendedGoals] = useState<GoalCatalogItem[]>([])
-  const [selectedGoals, setSelectedGoals] = useState<SelectedGoal[]>([])
+  const [selectedGoals, setSelectedGoals] = useState<GoalDetailRequest[]>([])
   const [currentGoalIndex, setCurrentGoalIndex] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,35 +51,22 @@ export function GoalsStepper({ session }: Props) {
       setError(null)
       try {
         // Load goal catalog
-        const catalogRes = await fetch(`${env.apiBaseUrl}/v1/goals/catalog`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
-        if (!catalogRes.ok) throw new Error('Failed to load goal catalog')
-        const catalog = await catalogRes.json()
+        const catalog = await fetchGoalCatalog(session)
         setGoalCatalog(catalog)
 
         // Load existing life context
-        const contextRes = await fetch(`${env.apiBaseUrl}/v1/goals/context`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
-        if (contextRes.ok) {
-          const context = await contextRes.json()
+        const context = await fetchLifeContext(session)
+        if (context) {
           setLifeContext(context)
         }
 
         // Load recommended goals
-        const recommendedRes = await fetch(`${env.apiBaseUrl}/v1/goals/recommended`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
-        if (recommendedRes.ok) {
-          const recommended = await recommendedRes.json()
+        try {
+          const recommended = await fetchRecommendedGoals(session)
           setRecommendedGoals(recommended)
+        } catch (err) {
+          // Recommended goals endpoint might not be available, ignore
+          console.warn('Failed to load recommended goals:', err)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
@@ -113,14 +78,14 @@ export function GoalsStepper({ session }: Props) {
     void loadData()
   }, [session])
 
-  const handleLifeContextSubmit = (context: LifeContext) => {
+  const handleLifeContextSubmit = (context: LifeContextRequest) => {
     setLifeContext(context)
     setCurrentStep(2)
   }
 
   const handleGoalSelection = (goals: GoalCatalogItem[]) => {
     // Initialize selected goals with default values
-    const initialized: SelectedGoal[] = goals.map((goal) => ({
+    const initialized: GoalDetailRequest[] = goals.map((goal) => ({
       goal_category: goal.goal_category,
       goal_name: goal.goal_name,
       estimated_cost: 0,
@@ -128,13 +93,15 @@ export function GoalsStepper({ session }: Props) {
       current_savings: 0,
       importance: 3,
       notes: null,
+      is_must_have: goal.is_mandatory_flag,
+      timeline_flexibility: 'somewhat_flexible',
     }))
     setSelectedGoals(initialized)
     setCurrentGoalIndex(0)
     setCurrentStep(3)
   }
 
-  const handleGoalDetailSubmit = (goalDetail: SelectedGoal) => {
+  const handleGoalDetailSubmit = (goalDetail: GoalDetailRequest) => {
     const updated = [...selectedGoals]
     updated[currentGoalIndex] = goalDetail
 
@@ -165,22 +132,10 @@ export function GoalsStepper({ session }: Props) {
     setError(null)
 
     try {
-      const response = await fetch(`${env.apiBaseUrl}/v1/goals/submit`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      await submitGoals(session, {
           context: lifeContext,
           selected_goals: selectedGoals,
-        }),
       })
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Failed to submit goals')
-      }
 
       // Success - show toast and success state
       showToast('Goals submitted successfully! 🎉', 'success', 5000)

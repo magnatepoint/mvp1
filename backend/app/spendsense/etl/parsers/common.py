@@ -65,11 +65,15 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "withdrawal amt.",
         "withdrawal amount",
         "withdrawal amount inr",
+        "withdrawal amount(inr)",
         "withdrawalamount",
         "withdrawalamountinr",
         "withdrawalamt",
         "withdrawal",
         "withdrawals",
+        "withdrawl (dr)",
+        "withdrawl(dr)",
+        "withdrawldr",
         "debit amount",
         "debit amount inr",
         "debit amt.",
@@ -80,11 +84,15 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "deposit amt.",
         "deposit amount",
         "deposit amount inr",
+        "deposit amount(inr)",
         "depositamount",
         "depositamountinr",
         "depositamt",
         "deposit",
         "deposits",
+        "deposit (cr)",
+        "deposit(cr)",
+        "depositcr",
         "credit amount",
         "credit amount inr",
         "credit amt.",
@@ -120,6 +128,15 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "transactionid",
         "txnid",
         "tran id",
+        "chq./ref.no.",
+        "chq/ref no",
+        "chq ref no",
+        "chq/ref.no.",
+        "chq ref.no.",
+        "cheque number",
+        "cheque no",
+        "chq no",
+        "chq number",
     ),
 }
 
@@ -296,7 +313,9 @@ def structure_dataframe(df_raw: pd.DataFrame, *, is_pdf: bool) -> pd.DataFrame:
 
         rename_map: dict[str, str] = {}
         for col_val in row_values:
-            token = _normalize_token(str(col_val).strip())
+            # Join multiline values (replace \n with space) before normalizing
+            joined_val = str(col_val).replace("\n", " ").strip()
+            token = _normalize_token(joined_val)
             for canonical, alias_tokens in NORMALIZED_ALIASES.items():
                 if token in alias_tokens:
                     rename_map[col_val] = canonical
@@ -365,7 +384,9 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     ]
 
     for column in df.columns:
-        token = _normalize_token(str(column).strip())
+        # Join multiline column names (replace \n with space) before normalizing
+        joined_col = str(column).replace("\n", " ").strip()
+        token = _normalize_token(joined_col)
         for canonical in priority_order:
             if canonical not in NORMALIZED_ALIASES:
                 continue

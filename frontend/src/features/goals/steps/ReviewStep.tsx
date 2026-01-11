@@ -1,30 +1,8 @@
-import { useState } from 'react'
-
-type LifeContext = {
-  age_band: string
-  dependents_spouse: boolean
-  dependents_children_count: number
-  dependents_parents_care: boolean
-  housing: string
-  employment: string
-  income_regularity: string
-  region_code: string
-  emergency_opt_out: boolean
-}
-
-type SelectedGoal = {
-  goal_category: string
-  goal_name: string
-  estimated_cost: number
-  target_date: string | null
-  current_savings: number
-  importance: number
-  notes: string | null
-}
+import type { LifeContextRequest, GoalDetailRequest } from '../../../types/goals'
 
 type Props = {
-  lifeContext: LifeContext | null
-  selectedGoals: SelectedGoal[]
+  lifeContext: LifeContextRequest | null
+  selectedGoals: GoalDetailRequest[]
   onSubmit: () => void
   onBack: () => void
   submitting: boolean
@@ -48,7 +26,7 @@ export function ReviewStep({ lifeContext, selectedGoals, onSubmit, onBack, submi
     })
   }
 
-  const getProgress = (goal: SelectedGoal) => {
+  const getProgress = (goal: GoalDetailRequest) => {
     if (goal.estimated_cost === 0) return 0
     return Math.min((goal.current_savings / goal.estimated_cost) * 100, 100)
   }
@@ -116,6 +94,18 @@ export function ReviewStep({ lifeContext, selectedGoals, onSubmit, onBack, submi
                   <span>Importance:</span>
                   <strong>{goal.importance}/5</strong>
                 </div>
+                {goal.is_must_have !== undefined && (
+                  <div className="goal-review-row">
+                    <span>Must-Have:</span>
+                    <strong>{goal.is_must_have ? 'Yes' : 'No'}</strong>
+                  </div>
+                )}
+                {goal.timeline_flexibility && (
+                  <div className="goal-review-row">
+                    <span>Timeline Flexibility:</span>
+                    <strong>{goal.timeline_flexibility.replace('_', ' ')}</strong>
+                  </div>
+                )}
                 <div className="goal-review-progress">
                   <div className="progress-bar">
                     <div

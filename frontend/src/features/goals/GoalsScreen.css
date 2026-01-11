@@ -7,6 +7,28 @@
 .goals-screen__hero {
   padding: 2rem;
   margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.goals-screen__insights-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.goals-screen__insights-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.goals-screen__insights-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text-primary, #fff);
 }
 
 .goals-screen__hero h1 {
@@ -21,10 +43,18 @@
 
   .goals-screen__hero {
     padding: 1.5rem;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .goals-screen__hero h1 {
     font-size: 1.5rem;
+  }
+
+  .goals-screen__insights-section {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    margin-top: 2rem;
   }
 }
 

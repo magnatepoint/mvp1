@@ -1,0 +1,15 @@
+[Unit]
+Description=MVP Backend Backup Service
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/mvp-backend
+ExecStart=/opt/mvp-backend/deploy/scripts/backup.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mvp-backup
+
+[Install]
+WantedBy=backup.timer

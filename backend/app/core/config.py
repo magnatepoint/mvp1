@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     environment: str = Field(default="development", alias="ENVIRONMENT")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    workers: int = Field(default=2, alias="WORKERS")
     supabase_url: AnyHttpUrl = Field(alias="SUPABASE_URL")
     supabase_anon_key: str = Field(alias="SUPABASE_ANON_KEY")
     supabase_service_role_key: str = Field(alias="SUPABASE_SERVICE_ROLE_KEY")

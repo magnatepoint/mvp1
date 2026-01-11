@@ -1,20 +1,9 @@
-import { useState, useEffect } from 'react'
-
-type LifeContext = {
-  age_band: string
-  dependents_spouse: boolean
-  dependents_children_count: number
-  dependents_parents_care: boolean
-  housing: string
-  employment: string
-  income_regularity: string
-  region_code: string
-  emergency_opt_out: boolean
-}
+import { useState } from 'react'
+import type { LifeContextRequest } from '../../../types/goals'
 
 type Props = {
-  initialData: LifeContext | null
-  onSubmit: (context: LifeContext) => void
+  initialData: LifeContextRequest | null
+  onSubmit: (context: LifeContextRequest) => void
   onSkip?: () => void
 }
 
@@ -27,16 +16,22 @@ const INDIAN_STATES = [
 ]
 
 export function LifeContextStep({ initialData, onSubmit, onSkip }: Props) {
-  const [formData, setFormData] = useState<LifeContext>({
-    age_band: initialData?.age_band || '',
+  const [formData, setFormData] = useState<LifeContextRequest>({
+    age_band: (initialData?.age_band as LifeContextRequest['age_band']) || '25-34',
     dependents_spouse: initialData?.dependents_spouse || false,
     dependents_children_count: initialData?.dependents_children_count || 0,
     dependents_parents_care: initialData?.dependents_parents_care || false,
-    housing: initialData?.housing || '',
-    employment: initialData?.employment || '',
-    income_regularity: initialData?.income_regularity || '',
+    housing: (initialData?.housing as LifeContextRequest['housing']) || 'rent',
+    employment: (initialData?.employment as LifeContextRequest['employment']) || 'salaried',
+    income_regularity: (initialData?.income_regularity as LifeContextRequest['income_regularity']) || 'stable',
     region_code: initialData?.region_code || '',
     emergency_opt_out: initialData?.emergency_opt_out || false,
+    monthly_investible_capacity: initialData?.monthly_investible_capacity ?? null,
+    total_monthly_emi_obligations: initialData?.total_monthly_emi_obligations ?? null,
+    risk_profile_overall: initialData?.risk_profile_overall ?? 'balanced',
+    review_frequency: initialData?.review_frequency ?? 'quarterly',
+    notify_on_drift: initialData?.notify_on_drift ?? true,
+    auto_adjust_on_income_change: initialData?.auto_adjust_on_income_change ?? false,
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -90,12 +85,13 @@ export function LifeContextStep({ initialData, onSubmit, onSkip }: Props) {
           id="housing"
           className="input-field"
           value={formData.housing}
-          onChange={(e) => setFormData({ ...formData, housing: e.target.value })}
+          onChange={(e) => setFormData({ ...formData, housing: e.target.value as LifeContextRequest['housing'] })}
         >
           <option value="">Select housing status</option>
           <option value="rent">Renting</option>
           <option value="own_mortgage">Own with Mortgage</option>
           <option value="own_nomortgage">Own without Mortgage</option>
+          <option value="living_with_parents">Living with Parents</option>
         </select>
         {errors.housing && <div className="error-message">{errors.housing}</div>}
       </div>
@@ -188,6 +184,64 @@ export function LifeContextStep({ initialData, onSubmit, onSkip }: Props) {
           />
           <span>I care for my parents</span>
         </label>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="monthly_investible_capacity">Monthly Investible Capacity (₹)</label>
+        <input
+          id="monthly_investible_capacity"
+          type="number"
+          min="0"
+          step="1000"
+          className="input-field"
+          value={formData.monthly_investible_capacity ?? ''}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              monthly_investible_capacity: e.target.value ? Number(e.target.value) : null,
+            })
+          }
+          placeholder="Amount available for goals after expenses"
+        />
+        <small className="text-muted">Estimated monthly amount available for goals</small>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="total_monthly_emi_obligations">Total Monthly EMIs (₹)</label>
+        <input
+          id="total_monthly_emi_obligations"
+          type="number"
+          min="0"
+          step="1000"
+          className="input-field"
+          value={formData.total_monthly_emi_obligations ?? ''}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              total_monthly_emi_obligations: e.target.value ? Number(e.target.value) : null,
+            })
+          }
+          placeholder="Total EMIs per month"
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="risk_profile_overall">Overall Risk Profile</label>
+        <select
+          id="risk_profile_overall"
+          className="input-field"
+          value={formData.risk_profile_overall ?? 'balanced'}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              risk_profile_overall: e.target.value as LifeContextRequest['risk_profile_overall'],
+            })
+          }
+        >
+          <option value="conservative">Conservative</option>
+          <option value="balanced">Balanced</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
       </div>
 
       <div className="form-group">

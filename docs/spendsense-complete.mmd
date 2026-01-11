@@ -1,0 +1,211 @@
+graph TB
+    subgraph Backend["🔧 Backend - SpendSense Transaction Engine"]
+        direction TB
+        
+        subgraph ETLPipeline["ETL Pipeline"]
+            direction LR
+            Tasks[Celery Tasks<br/>ingest_statement_file_task<br/>Background processing]
+            Pipeline[Enrichment Pipeline<br/>enrich_transactions<br/>Category matching]
+            Parsers[Bank Parsers<br/>━━━━━━━━━━━━━━━━<br/>Excel Parser<br/>PDF Parser<br/>Email Parser]
+        end
+        
+        subgraph MLServices["🤖 ML Services"]
+            direction LR
+            Predictor[MLPredictorService<br/>Category prediction<br/>User/Global models]
+            Trainer[CategoryPredictor<br/>Model training<br/>Retraining pipeline]
+            MLRoutes[ML Routes<br/>Training endpoints<br/>Model management]
+        end
+        
+        subgraph CoreServices["Core Services"]
+            direction LR
+            SpendSenseService[SpendSenseService<br/>Main facade<br/>KPI calculations]
+            BankParser[BankTransactionParser<br/>Unified parser<br/>Multi-bank support]
+            MerchantLookup[Merchant Lookup<br/>Merchant matching<br/>Category inference]
+            LearningService[Learning Service<br/>Rule creation<br/>Feedback learning]
+            CategoryInference[Category Inference<br/>Keyword matching<br/>Pattern detection]
+        end
+        
+        subgraph DataProcessing["Data Processing"]
+            direction LR
+            TxnPopulator[Transaction Populator<br/>Parse metadata<br/>Extract UPI/MCC info]
+            PGRulesClient[PostgreSQL Rules Client<br/>Merchant rules<br/>Pattern matching]
+        end
+        
+        subgraph APIEndpoints["REST API Endpoints"]
+            direction TB
+            UploadEP[POST /spendsense/uploads/file<br/>Upload statement]
+            BatchEP[POST /spendsense/batches<br/>Create batch]
+            TransactionsEP[GET /spendsense/transactions<br/>List transactions]
+            KPIsEP[GET /spendsense/kpis<br/>Get KPIs]
+            InsightsEP[GET /spendsense/insights<br/>Get insights]
+            CategoriesEP[GET /spendsense/categories<br/>List categories]
+            UpdateEP[PUT /spendsense/transactions/:id<br/>Update transaction]
+            ReEnrichEP[POST /spendsense/re-enrich<br/>Re-enrich transactions]
+        end
+        
+        subgraph Database["PostgreSQL Tables"]
+            direction TB
+            TxnFact[spendsense.txn_fact<br/>Canonical transactions<br/>user_id, txn_date, amount]
+            TxnEnriched[spendsense.txn_enriched<br/>Category enrichment<br/>category_code, subcategory]
+            TxnParsed[spendsense.txn_parsed<br/>Parsed metadata<br/>UPI RRN, counterparty]
+            TxnStaging[spendsense.txn_staging<br/>Staging area<br/>Raw transactions]
+            UploadBatch[spendsense.upload_batch<br/>Upload tracking<br/>Status, file_name]
+            MerchantRules[spendsense.merchant_rules<br/>Categorization rules<br/>Pattern matching]
+            DimCategory[spendsense.dim_category<br/>Category master<br/>txn_type, display_order]
+            DimSubcategory[spendsense.dim_subcategory<br/>Subcategory master<br/>Category mapping]
+            DimMerchant[spendsense.dim_merchant<br/>Merchant master<br/>Normalized names]
+            TxnOverride[spendsense.txn_override<br/>User overrides<br/>Category corrections]
+        end
+        
+        subgraph MerchantRoutes["Merchant Management"]
+            MerchantAPI[Merchant Routes<br/>GET /merchants<br/>Merchant CRUD]
+        end
+    end
+    
+    subgraph Frontend["⚛️ Frontend - React/TypeScript"]
+        direction TB
+        
+        subgraph UIComponents["UI Components"]
+            SpendSenseScreen["SpendSenseScreen<br/>━━━━━━━━━━━━━━━━<br/>📱 Main screen<br/>🔄 Re-enrich trigger<br/>📊 KPI display"]
+            
+            SpendSensePanel["SpendSensePanel<br/>━━━━━━━━━━━━━━━━<br/>📋 Transaction list<br/>🔍 Search & filters<br/>📈 Charts & visualizations"]
+            
+            AIInsights["AIInsights<br/>━━━━━━━━━━━━━━━━<br/>🤖 AI-powered insights<br/>💡 Spending patterns<br/>📊 Trend analysis"]
+            
+            BudgetTracker["BudgetTracker<br/>━━━━━━━━━━━━━━━━<br/>💰 Budget vs actual<br/>📊 Category breakdown<br/>⚠️ Overspend alerts"]
+            
+            SpendingPredictions["SpendingPredictions<br/>━━━━━━━━━━━━━━━━<br/>🔮 Future predictions<br/>📈 Trend forecasting<br/>💹 Projections"]
+            
+            ExportButton["ExportButton<br/>━━━━━━━━━━━━━━━━<br/>📥 CSV export<br/>📄 JSON export<br/>💾 Data download"]
+        end
+        
+        subgraph FrontendFiles["Frontend Files"]
+            FrontendFile1[src/features/spendsense/<br/>SpendSenseScreen.tsx]
+            FrontendFile2[src/features/spendsense/<br/>SpendSensePanel.tsx]
+            FrontendFile3[src/components/<br/>AIInsights.tsx]
+            FrontendFile4[src/components/<br/>BudgetTracker.tsx]
+            FrontendFile5[src/components/<br/>SpendingPredictions.tsx]
+            FrontendFile6[src/components/<br/>ExportButton.tsx]
+        end
+    end
+    
+    subgraph Monyweb["🌐 Monyweb - Next.js"]
+        direction TB
+        
+        subgraph NextComponents["Next.js Components"]
+            NextSpendSenseScreen["SpendSenseScreen<br/>━━━━━━━━━━━━━━━━<br/>🔄 Server/Client components<br/>📡 API integration<br/>🎨 Next.js styling"]
+            
+            NextSpendSensePanel["SpendSensePanel<br/>━━━━━━━━━━━━━━━━<br/>📋 Transaction management<br/>📊 Data visualization<br/>🔍 Search & filters"]
+        end
+        
+        subgraph NextFiles["Monyweb Files"]
+            NextFile1[app/features/spendsense/<br/>SpendSenseScreen.tsx]
+            NextFile2[app/features/spendsense/<br/>SpendSensePanel.tsx]
+        end
+    end
+    
+    %% Backend Internal Connections
+    Tasks --> Parsers
+    Tasks --> Pipeline
+    Pipeline --> MerchantLookup
+    Pipeline --> CategoryInference
+    Pipeline --> Predictor
+    Pipeline --> TxnEnriched
+    
+    BankParser --> Parsers
+    SpendSenseService --> BankParser
+    SpendSenseService --> TxnPopulator
+    SpendSenseService --> Pipeline
+    
+    Predictor --> Trainer
+    LearningService --> MerchantRules
+    CategoryInference --> DimCategory
+    MerchantLookup --> DimMerchant
+    PGRulesClient --> MerchantRules
+    
+    TxnPopulator --> TxnParsed
+    Pipeline --> TxnEnriched
+    
+    %% API Connections
+    UploadEP --> Tasks
+    BatchEP --> UploadBatch
+    TransactionsEP --> TxnFact
+    TransactionsEP --> TxnEnriched
+    KPIsEP --> TxnFact
+    KPIsEP --> TxnEnriched
+    InsightsEP --> TxnFact
+    InsightsEP --> TxnEnriched
+    CategoriesEP --> DimCategory
+    CategoriesEP --> DimSubcategory
+    UpdateEP --> TxnOverride
+    ReEnrichEP --> Pipeline
+    MerchantAPI --> DimMerchant
+    MerchantAPI --> MerchantRules
+    
+    %% Database Connections
+    TxnStaging --> TxnFact
+    TxnFact --> TxnParsed
+    TxnParsed --> TxnEnriched
+    TxnEnriched --> TxnOverride
+    UploadBatch --> TxnStaging
+    MerchantRules --> TxnEnriched
+    DimCategory --> TxnEnriched
+    DimSubcategory --> TxnEnriched
+    DimMerchant --> TxnEnriched
+    
+    %% Frontend Connections
+    SpendSenseScreen --> SpendSensePanel
+    SpendSensePanel --> AIInsights
+    SpendSensePanel --> BudgetTracker
+    SpendSensePanel --> SpendingPredictions
+    SpendSensePanel --> ExportButton
+    
+    SpendSenseScreen --> UploadEP
+    SpendSenseScreen --> ReEnrichEP
+    SpendSensePanel --> TransactionsEP
+    SpendSensePanel --> KPIsEP
+    SpendSensePanel --> InsightsEP
+    SpendSensePanel --> CategoriesEP
+    SpendSensePanel --> UpdateEP
+    AIInsights --> InsightsEP
+    BudgetTracker --> KPIsEP
+    SpendingPredictions --> InsightsEP
+    ExportButton --> TransactionsEP
+    
+    SpendSenseScreen --> FrontendFile1
+    SpendSensePanel --> FrontendFile2
+    AIInsights --> FrontendFile3
+    BudgetTracker --> FrontendFile4
+    SpendingPredictions --> FrontendFile5
+    ExportButton --> FrontendFile6
+    
+    %% Monyweb Connections
+    NextSpendSenseScreen --> NextSpendSensePanel
+    NextSpendSenseScreen --> UploadEP
+    NextSpendSenseScreen --> ReEnrichEP
+    NextSpendSensePanel --> TransactionsEP
+    NextSpendSensePanel --> KPIsEP
+    NextSpendSensePanel --> InsightsEP
+    NextSpendSensePanel --> CategoriesEP
+    NextSpendSensePanel --> UpdateEP
+    
+    NextSpendSenseScreen --> NextFile1
+    NextSpendSensePanel --> NextFile2
+    
+    %% Styling
+    classDef backend fill:#2563eb,stroke:#1e40af,stroke-width:3px,color:#fff
+    classDef frontend fill:#10b981,stroke:#059669,stroke-width:3px,color:#fff
+    classDef monyweb fill:#f59e0b,stroke:#d97706,stroke-width:3px,color:#fff
+    classDef ml fill:#8b5cf6,stroke:#7c3aed,stroke-width:2px,color:#fff
+    classDef database fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff
+    classDef etl fill:#06b6d4,stroke:#0891b2,stroke-width:2px,color:#fff
+    classDef files fill:#64748b,stroke:#475569,stroke-width:1px,color:#fff
+    
+    class SpendSenseService,BankParser,MerchantLookup,LearningService,CategoryInference,TxnPopulator,PGRulesClient,UploadEP,BatchEP,TransactionsEP,KPIsEP,InsightsEP,CategoriesEP,UpdateEP,ReEnrichEP,MerchantAPI backend
+    class SpendSenseScreen,SpendSensePanel,AIInsights,BudgetTracker,SpendingPredictions,ExportButton frontend
+    class NextSpendSenseScreen,NextSpendSensePanel monyweb
+    class Predictor,Trainer,MLRoutes ml
+    class TxnFact,TxnEnriched,TxnParsed,TxnStaging,UploadBatch,MerchantRules,DimCategory,DimSubcategory,DimMerchant,TxnOverride database
+    class Tasks,Pipeline,Parsers etl
+    class FrontendFile1,FrontendFile2,FrontendFile3,FrontendFile4,FrontendFile5,FrontendFile6,NextFile1,NextFile2 files
+

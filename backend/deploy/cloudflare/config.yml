@@ -1,0 +1,19 @@
+tunnel: mvp-backend-tunnel
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  # WebSocket and HTTP traffic
+  - hostname: api.yourdomain.com
+    service: http://localhost:8000
+    originRequest:
+      noHappyEyeballs: true
+      keepAliveConnections: 100
+      keepAliveTimeout: 90s
+      httpHostHeader: api.yourdomain.com
+      # WebSocket support
+      http2Origin: true
+      # Compression
+      compressionQuality: 0
+
+  # Catch-all rule (must be last)
+  - service: http_status:404
