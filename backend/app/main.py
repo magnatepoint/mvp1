@@ -49,8 +49,19 @@ def create_app() -> FastAPI:
         "http://10.0.2.2:8000",  # Android emulator
         "*",  # Allow all origins for development (Flutter apps)
     ]
-    # In production, restrict CORS to frontend origin only
-    cors_origins = [str(settings.frontend_origin)] if settings.environment == "production" else allowed_origins
+    
+    # In production, allow frontend origin and mobile apps
+    # Mobile apps (iOS, Android, Flutter) don't have traditional origins,
+    # so we need to allow all origins for them to work
+    if settings.environment == "production":
+        # Allow frontend web origin and all origins for mobile apps
+        # Security is handled through authentication tokens, not CORS
+        cors_origins = [
+            str(settings.frontend_origin),
+            "*",  # Allow all origins for mobile apps (iOS, Android, Flutter)
+        ]
+    else:
+        cors_origins = allowed_origins
     application.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
