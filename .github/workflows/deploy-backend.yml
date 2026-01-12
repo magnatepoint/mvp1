@@ -34,6 +34,30 @@ jobs:
             exit 1
           fi
           echo "✅ All secrets are configured"
+          echo "📍 SERVER_HOST: ${{ secrets.SERVER_HOST }}"
+          echo "👤 SERVER_USER: ${{ secrets.SERVER_USER }}"
+      
+      - name: Test Server Connectivity
+        run: |
+          echo "🔍 Testing connectivity to server..."
+          if ping -c 1 -W 5 ${{ secrets.SERVER_HOST }} > /dev/null 2>&1; then
+            echo "✅ Server is reachable via ping"
+          else
+            echo "⚠️  Server is not reachable via ping (this might be okay if ping is disabled)"
+          fi
+          
+          echo "🔍 Testing SSH port (22)..."
+          if timeout 5 bash -c "echo > /dev/tcp/${{ secrets.SERVER_HOST }}/22" 2>/dev/null; then
+            echo "✅ Port 22 is open"
+          else
+            echo "❌ Port 22 is not accessible from GitHub Actions"
+            echo "💡 Your server might be on a private network or behind a firewall"
+            echo "💡 Solutions:"
+            echo "   1. Use your server's PUBLIC IP (not 192.168.x.x or 10.x.x.x)"
+            echo "   2. Expose SSH through Cloudflare Tunnel"
+            echo "   3. Set up port forwarding on your router"
+            exit 1
+          fi
       
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.0
