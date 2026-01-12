@@ -6,7 +6,7 @@ services:
     container_name: mvp-backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
     env_file:

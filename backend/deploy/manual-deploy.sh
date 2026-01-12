@@ -97,6 +97,9 @@ else
     
     ssh "$SERVER_USER@$SERVER_HOST" << ENDSSH
         set -e
+        # Pass environment variables from local
+        export APP_PORT="${APP_PORT:-8000}"
+        
         cd $DEPLOY_DIR
         
         # Pull latest code

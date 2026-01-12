@@ -2,17 +2,60 @@
 
 Since CI/CD has network connectivity issues, use this manual deployment process.
 
-## Quick Deploy
+## Prerequisites
 
-### Option 1: Deploy from Your Local Machine
+Before your first deployment, you need to set up the server.
 
-**From your Mac (in the mvp directory):**
+### 1. Server Setup (One-time)
+
+Run the included setup script on your Ubuntu server. This script will install Docker, Git, and create the necessary directories.
+
+**SSH into your server:**
+```bash
+ssh username@your-server-ip
+```
+
+**Copy and run the script (or copy-paste its content):**
+You can copy the `deploy/setup_ubuntu.sh` file to your server:
+```bash
+# From your local machine
+scp deploy/setup_ubuntu.sh username@your-server-ip:~/
+```
+
+**On the server:**
+```bash
+chmod +x setup_ubuntu.sh
+sudo ./setup_ubuntu.sh
+```
+
+### 2. Configure Environment
+
+You must create the `.env` file on the server manually or copy it from your local machine.
+
+```bash
+# On your local machine (be careful with secrets!)
+scp .env username@your-server-ip:/opt/mvp-backend/backend/.env
+```
+
+**OR** create it manually on the server:
+```bash
+nano /opt/mvp-backend/backend/.env
+# Paste your environment variables
+```
+
+---
+
+## Deploying
+
+### Option 1: Deploy from Your Local Machine (Recommended)
+
+**From your Mac (in the mvp/backend directory):**
 
 ```bash
 cd /Users/santosh/coding/mvp/backend
 
-# Set server details
-export SERVER_USER=malla
+# Set server details (if not set in your shell profile)
+export SERVER_USER=your-username
 export SERVER_HOST=your-server-ip
 
 # Run deployment
@@ -21,7 +64,7 @@ export SERVER_HOST=your-server-ip
 
 The script will:
 - SSH into your server
-- Pull latest code
+- Pull latest code (requires your server to have git access)
 - Rebuild Docker images
 - Run migrations
 - Restart services
@@ -32,8 +75,10 @@ The script will:
 **SSH into your server first:**
 
 ```bash
-ssh malla@your-server-ip
+ssh username@your-server-ip
 cd /opt/mvp-backend/backend
+
+# Run the deploy script
 ./deploy/manual-deploy.sh
 ```
 
@@ -41,11 +86,9 @@ cd /opt/mvp-backend/backend
 
 If you prefer to do it step by step:
 
-### On Your Server:
-
 ```bash
 # 1. SSH into server
-ssh malla@your-server-ip
+ssh username@your-server-ip
 
 # 2. Navigate to backend directory
 cd /opt/mvp-backend/backend
@@ -57,7 +100,7 @@ git pull origin main
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
 
 # 5. Run migrations (optional)
-./deploy/scripts/run-migrations.sh
+# ./deploy/scripts/run-migrations.sh
 
 # 6. Restart services
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
@@ -67,104 +110,28 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 docker-compose ps
 
 # 8. Check health
-./deploy/scripts/health-check.sh
+# ./deploy/scripts/health-check.sh
 ```
-
-## Quick Commands Reference
-
-### Check Services
-```bash
-docker-compose ps
-docker-compose logs -f
-```
-
-### Restart Single Service
-```bash
-docker-compose restart backend
-docker-compose restart celery-worker
-```
-
-### View Logs
-```bash
-docker-compose logs -f backend
-docker-compose logs -f celery-worker
-docker-compose logs -f redis
-```
-
-### Stop All Services
-```bash
-docker-compose down
-```
-
-### Start All Services
-```bash
-docker-compose up -d
-```
-
-## Deployment Checklist
-
-Before deploying:
-
-- [ ] Code is committed and pushed to GitHub
-- [ ] `.env` file is configured on server
-- [ ] Server has internet access
-- [ ] Docker is running on server
-
-After deploying:
-
-- [ ] Services are running: `docker-compose ps`
-- [ ] Health check passes: `./deploy/scripts/health-check.sh`
-- [ ] API is accessible: `curl http://localhost:8000/health`
-- [ ] Check logs for errors: `docker-compose logs`
 
 ## Troubleshooting
 
 ### "git pull" fails
+Ensure your server has SSH keys added to GitHub or your repo is public.
 ```bash
-# Check git remote
-git remote -v
-
-# If needed, set remote
-git remote set-url origin https://github.com/magnatepoint/mvp1.git
+# Generate SSH key on server
+ssh-keygen -t ed25519 -C "server@deploy"
+cat ~/.ssh/id_ed25519.pub
+# Add this key to your GitHub Repo -> Settings -> Deploy Keys
 ```
 
 ### Docker build fails
 ```bash
-# Check Docker is running
-docker ps
-
-# Check disk space
-df -h
-
-# Clean up old images
 docker system prune -a
 ```
 
 ### Services won't start
 ```bash
-# Check logs
 docker-compose logs
-
-# Check .env file
-cat .env
-
-# Verify all required variables are set
+cat .env # Check variables
 ```
 
-## When to Use Manual Deploy
-
-- ✅ Network connectivity issues with CI/CD
-- ✅ Need more control over deployment
-- ✅ Testing changes before full deployment
-- ✅ Quick hotfixes
-- ✅ Debugging deployment issues
-
-## Future: Re-enable CI/CD
-
-Once network issues are resolved:
-
-1. Fix `SERVER_HOST` to use public IP or Cloudflare Tunnel
-2. Test GitHub Actions workflow
-3. Re-enable automatic deployments
-
-For now, manual deployment works perfectly fine!
