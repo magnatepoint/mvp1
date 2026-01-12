@@ -62,6 +62,8 @@ deploy() {
     fi
     
     echo -e "${BLUE}🛑 Stopping existing services...${NC}"
+    # Stop any containers using port 8000
+    docker ps --format '{{.Names}}' | grep -E "(mvp|backend)" | xargs docker stop 2>/dev/null || true
     docker-compose -f docker-compose.yml -f docker-compose.prod.yml down || true
     
     echo -e "${BLUE}🚀 Starting services...${NC}"
