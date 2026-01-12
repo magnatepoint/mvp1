@@ -29,32 +29,40 @@ jobs:
       
       - name: Deploy to server
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
             set -e
             cd /opt/mvp-backend/backend
             
-            echo "📥 Pulling latest code..."
-            git pull origin main
-            
-            echo "🔨 Rebuilding Docker images..."
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
-            
-            echo "🗄️  Running database migrations..."
-            ./deploy/scripts/run-migrations.sh || echo "⚠️  Migrations failed (continuing anyway)"
-            
-            echo "🛑 Stopping existing services..."
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml down || true
-            
-            echo "🚀 Starting services..."
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-            
-            echo "⏳ Waiting for services to be ready..."
-            sleep 15
-            
-            echo "🏥 Running health check..."
-            ./deploy/scripts/health-check.sh || echo "⚠️  Health check had issues"
-            
-            echo "✅ Deployment complete!"
+            # Use the deployment script
+            if [ -f "deploy/scripts/deploy-remote.sh" ]; then
+              bash deploy/scripts/deploy-remote.sh
+            else
+              # Fallback to inline deployment
+              echo "📥 Pulling latest code..."
+              git fetch origin
+              git reset --hard origin/main
+              git clean -fd
+              
+              echo "🔨 Rebuilding Docker images..."
+              docker-compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+              
+              echo "🗄️  Running database migrations..."
+              ./deploy/scripts/run-migrations.sh || echo "⚠️  Migrations failed (continuing anyway)"
+              
+              echo "🛑 Stopping existing services..."
+              docker-compose -f docker-compose.yml -f docker-compose.prod.yml down || true
+              
+              echo "🚀 Starting services..."
+              docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+              
+              echo "⏳ Waiting for services to be ready..."
+              sleep 15
+              
+              echo "🏥 Running health check..."
+              ./deploy/scripts/health-check.sh || echo "⚠️  Health check had issues"
+              
+              echo "✅ Deployment complete!"
+            fi
           ENDSSH
       
       - name: Deployment Status
