@@ -22,7 +22,7 @@ from .models import (
 from .etl.parsers import SpendSenseParseError
 from .service import SpendSenseService
 
-router = APIRouter(prefix="/spendsense", tags=["spendsense"])
+router = APIRouter(prefix="/v1/spendsense", tags=["spendsense"])
 
 
 def get_service(pool=Depends(get_db_pool)) -> SpendSenseService:
@@ -132,6 +132,8 @@ async def list_transactions(
     category_code: str | None = Query(None),
     subcategory_code: str | None = Query(None),
     channel: str | None = Query(None),
+    start_date: str | None = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: str | None = Query(None, description="End date in YYYY-MM-DD format"),
     user: AuthenticatedUser = Depends(get_current_user),
     service: SpendSenseService = Depends(get_service),
 ) -> TransactionListResponse:
@@ -143,6 +145,8 @@ async def list_transactions(
         category_code=category_code,
         subcategory_code=subcategory_code,
         channel=channel,
+        start_date=start_date,
+        end_date=end_date,
     )
     # Calculate page and page_size from limit and offset
     page = (offset // limit) + 1 if limit > 0 else 1
