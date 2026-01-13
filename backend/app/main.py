@@ -96,12 +96,52 @@ def create_app() -> FastAPI:
 
     @application.on_event("startup")
     async def startup() -> None:
-        application.state.db_pool = await asyncpg.create_pool(
-            str(settings.postgres_dsn),
-            min_size=1,
-            max_size=5,
-            statement_cache_size=0,
-        )
+        # Connect to database with retry logic
+        max_retries = 5
+        retry_delay = 2  # seconds
+        db_pool = None
+        
+        for attempt in range(max_retries):
+            try:
+                # Test connection first
+                test_conn = await asyncio.wait_for(
+                    asyncpg.connect(
+                        str(settings.postgres_dsn),
+                        statement_cache_size=0,
+                        timeout=30,  # 30 second connection timeout
+                    ),
+                    timeout=35.0,
+                )
+                await test_conn.close()
+                
+                # Connection successful, create pool
+                db_pool = await asyncpg.create_pool(
+                    str(settings.postgres_dsn),
+                    min_size=1,
+                    max_size=5,
+                    statement_cache_size=0,
+                )
+                logger.info("Database connection pool created successfully")
+                break
+            except (asyncio.TimeoutError, OSError, Exception) as exc:
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        f"Database connection attempt {attempt + 1}/{max_retries} failed: {exc}. "
+                        f"Retrying in {retry_delay}s..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error(
+                        f"Failed to connect to database after {max_retries} attempts: {exc}. "
+                        f"Check POSTGRES_URL environment variable and network connectivity."
+                    )
+                    raise
+        
+        if db_pool is None:
+            raise RuntimeError("Failed to establish database connection pool")
+        
+        application.state.db_pool = db_pool
         application.state.redis_listener = asyncio.create_task(redis_events_listener())
 
     @application.on_event("shutdown")

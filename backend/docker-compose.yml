@@ -14,6 +14,10 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     depends_on:
       redis:
         condition: service_healthy
@@ -45,6 +49,10 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     depends_on:
       - redis
       - backend
@@ -71,6 +79,10 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./celerybeat-schedule:/app/celerybeat-schedule
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     depends_on:
       - redis
       - backend
