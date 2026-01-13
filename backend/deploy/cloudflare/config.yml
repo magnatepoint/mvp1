@@ -4,7 +4,7 @@ credentials-file: /etc/cloudflared/credentials.json
 ingress:
   # WebSocket and HTTP traffic
   - hostname: api.monytix.ai
-    service: http://localhost:8000
+    service: http://localhost:8001
     originRequest:
       noHappyEyeballs: true
       keepAliveConnections: 100
