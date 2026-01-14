@@ -26,7 +26,7 @@ struct Config {
     private static let deviceIPAddress = "192.168.68.104" // Your Mac's local IP (update if network changes)
     
     static var apiBaseUrl: String {
-        return "http://bwkcw0s0g0csk8cg8o88ckoc.192.168.68.113.sslip.io"
+        return "https://api.monytix.ai"
     }
     
     // Helper to get connection instructions

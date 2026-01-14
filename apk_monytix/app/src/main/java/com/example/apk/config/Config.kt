@@ -11,7 +11,7 @@ object Config {
     // Production backend API endpoint
     // Note: Retrofit requires trailing slash for base URL when using absolute paths
     val apiBaseUrl: String
-        get() = "http://bwkcw0s0g0csk8cg8o88ckoc.192.168.68.113.sslip.io/"
+        get() = "https://api.monytix.ai/"
     
     // OAuth redirect URL for Google Sign In
     const val OAUTH_REDIRECT_URL = "com.example.apk://login-callback/"
