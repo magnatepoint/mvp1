@@ -96,6 +96,10 @@ class LootDropSummary(BaseModel):
     rarity: str = "common"
 
 
+class AvailableMonthsResponse(BaseModel):
+    data: list[str]
+
+
 class SpendSenseKPI(BaseModel):
     month: date | None
     income_amount: float

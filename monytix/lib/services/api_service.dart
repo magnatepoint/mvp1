@@ -15,15 +15,7 @@ class ApiService {
   // For iOS simulator, use localhost or 127.0.0.1
   // For macOS desktop, use 127.0.0.1
   static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:8000';
-    }
-    if (Platform.isAndroid) {
-      // Android emulator uses 10.0.2.2 to access host machine's localhost
-      return 'http://10.0.2.2:8000';
-    }
-    // iOS simulator and macOS desktop can use 127.0.0.1
-    return 'http://127.0.0.1:8000';
+    return 'https://api.monytix.ai';
   }
   
   String? _authToken;

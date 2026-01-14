@@ -22,8 +22,9 @@ def decode_supabase_jwt(token: str) -> AuthenticatedUser:
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
             audience="authenticated",
+            leeway=600,  # 10 minutes leeway for clock skew
         )
-    except InvalidTokenError as exc:  # pragma: no cover - thin wrapper
+    except InvalidTokenError as exc:
         raise SupabaseJWTError("Invalid Supabase JWT") from exc
 
     claims = AuthenticatedUser(**payload)

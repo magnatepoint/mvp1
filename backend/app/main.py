@@ -45,8 +45,8 @@ def create_app() -> FastAPI:
         f"{frontend_origin}/",
         "http://localhost:3000",
         "http://localhost:3000/",
-        "http://127.0.0.1:8000",
-        "http://10.0.2.2:8000",  # Android emulator
+        "http://127.0.0.1:8001",
+        "http://10.0.2.2:8001",  # Android emulator
         "*",  # Allow all origins for development (Flutter apps)
     ]
     

@@ -19,7 +19,7 @@ if [ -f "$BACKEND_DIR/.env" ]; then
 fi
 
 # Default values
-BACKEND_URL=${BACKEND_URL:-http://localhost:8000}
+BACKEND_URL=${BACKEND_URL:-http://localhost:8001}
 REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"

@@ -18,6 +18,7 @@ from .models import (
     UploadBatchCreate,
     CategoryResponse,
     SubcategoryResponse,
+    AvailableMonthsResponse,
 )
 from .etl.parsers import SpendSenseParseError
 from .service import SpendSenseService
@@ -79,13 +80,14 @@ async def get_kpis(
     return await service.get_kpis(user.user_id, month=month)
 
 
-@router.get("/kpis/available-months", summary="Get available months with transaction data")
+@router.get("/kpis/available-months", response_model=AvailableMonthsResponse, summary="Get available months with transaction data")
 async def get_available_months(
     user: AuthenticatedUser = Depends(get_current_user),
     service: SpendSenseService = Depends(get_service),
-) -> list[str]:
+) -> AvailableMonthsResponse:
     """Return list of available months in YYYY-MM format, sorted descending."""
-    return await service.get_available_months(user.user_id)
+    months = await service.get_available_months(user.user_id)
+    return AvailableMonthsResponse(data=months)
 
 
 @router.get("/insights", response_model=dict[str, Any], summary="Get comprehensive spending insights")

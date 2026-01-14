@@ -1,0 +1,21 @@
+import jwt
+from jwt import InvalidTokenError
+
+token = "eyJhbGciOiJIUzI1NiIsImtpZCI6Ik82bmloeVBJeVFpaGNBcDMiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3Z3YWd0aWtweGJoanJmZm9scnFuLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIyZGY3MzBlMy01MzI5LTQ0ZmYtYTA4NS0xZWM3NWFiNjg4YjQiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY4Mzk1MDc3LCJpYXQiOjE3NjgzOTE0NzcsImVtYWlsIjoic2FudG9zaC5tdmhzQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiLCJnb29nbGUiXX0sInVzZXJfbWV0YWRhdGEiOnsiYXZhdGFyX3VybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0tqb2lKQ0hoV3FUZkZrc1A0TkRPUlF5cW1yNTM4VnU4a0NNVFlRMjhtYlAwbV9IcUZPPXM5Ni1jIiwiZW1haWwiOiJzYW50b3NoLm12aHNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6Im1hbGxhIHNhbnRvc2giLCJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJuYW1lIjoibWFsbGEgc2FudG9zaCIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0tqb2lKQ0hoV3FUZkZrc1A0TkRPUlF5cW1yNTM4VnU4a0NNVFlRMjhtYlAwbV9IcUZPPXM5Ni1jIiwicHJvdmlkZXJfaWQiOiIxMTE5OTUzMTg1NTgxMDc4MDY0ODMiLCJzdWIiOiIxMTE5OTUzMTg1NTgxMDc4MDY0ODMifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc2ODM5MTQ3N31dLCJzZXNzaW9uX2lkIjoiOWY4MjUzMTMtMjIxYS00ZDg2LTlkZjgtZmUwMjRjNzhlNzk3IiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.XtfzzJ7WjEaG3-kdK6BQ0DvtVDqIBnlJGnvwnSodW0U"
+secret = "F0xPm1pBCc2mJNjoOaC6+8yEN2J/XTMbIYc8RFx8RVPcGSlY2GR/crEyzPO64corMVNCgToYQRlDQ6uQ4mXWFQ=="
+
+print("--- Testing with raw secret string ---")
+try:
+    payload = jwt.decode(token, secret, algorithms=["HS256"], audience="authenticated")
+    print("Success with raw string!")
+except Exception as e:
+    print(f"Failed with raw string: {e}")
+
+import base64
+print("\n--- Testing with decoded base64 secret ---")
+try:
+    decoded_secret = base64.b64decode(secret)
+    payload = jwt.decode(token, decoded_secret, algorithms=["HS256"], audience="authenticated")
+    print("Success with decoded base64!")
+except Exception as e:
+    print(f"Failed with decoded base64: {e}")

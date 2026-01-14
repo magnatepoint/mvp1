@@ -29,15 +29,9 @@ sudo ./setup_ubuntu.sh
 ```
 
 ### 2. Configure Environment
+The `manual-deploy.sh` script will automatically copy your local `.env` and `gmail-pubsub-key.json` to the server if run from your local machine.
 
-You must create the `.env` file on the server manually or copy it from your local machine.
-
-```bash
-# On your local machine (be careful with secrets!)
-scp .env username@your-server-ip:/opt/mvp-backend/backend/.env
-```
-
-**OR** create it manually on the server:
+However, you can still manually create them if needed:
 ```bash
 nano /opt/mvp-backend/backend/.env
 # Paste your environment variables
@@ -64,7 +58,8 @@ export SERVER_HOST=your-server-ip
 
 The script will:
 - SSH into your server
-- Pull latest code (requires your server to have git access)
+- **Upload secrets** (`.env`, `gmail-pubsub-key.json`)
+- Pull latest code
 - Rebuild Docker images
 - Run migrations
 - Restart services
@@ -88,7 +83,7 @@ If you prefer to do it step by step:
 
 ```bash
 # 1. SSH into server
-ssh username@your-server-ip
+ssh malla@192.168.68.113
 
 # 2. Navigate to backend directory
 cd /opt/mvp-backend/backend

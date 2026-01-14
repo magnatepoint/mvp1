@@ -15,6 +15,7 @@ celery_app.conf.update(
     task_ignore_result=True,
     task_serializer="json",
     result_serializer="json",
+    beat_schedule_filename="/app/data/celerybeat-schedule",
     beat_schedule={
         "renew-gmail-watches": {
             "task": "gmail.renew_watches",

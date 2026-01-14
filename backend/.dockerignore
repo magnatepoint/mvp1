@@ -61,5 +61,4 @@ celerybeat.pid
 *.swp
 
 # Deployment
-deploy/
 *.sh

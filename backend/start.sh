@@ -6,5 +6,5 @@
 cd "$(dirname "$0")"
 source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null
 
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 

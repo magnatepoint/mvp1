@@ -144,7 +144,7 @@ credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
   - hostname: $domain
-    service: http://localhost:8000
+    service: http://localhost:8001
     originRequest:
       noHappyEyeballs: true
       keepAliveConnections: 100
