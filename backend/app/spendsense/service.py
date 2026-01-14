@@ -656,6 +656,9 @@ class SpendSenseService:
         category_code: str | None = None,
         subcategory_code: str | None = None,
         channel: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        **kwargs: Any,
     ) -> tuple[List[TransactionRecord], int]:
         """List transactions with pagination and optional filters."""
         where_clauses = ["v.user_id = $1"]
@@ -667,6 +670,20 @@ class SpendSenseService:
             where_clauses.append(clause.format(idx=placeholder))
             params.append(value)
             placeholder += 1
+
+        if start_date:
+            try:
+                s_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+                add_clause("v.txn_date >= ${idx}", s_date)
+            except ValueError:
+                pass  # Ignore invalid dates
+
+        if end_date:
+            try:
+                e_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+                add_clause("v.txn_date <= ${idx}", e_date)
+            except ValueError:
+                pass  # Ignore invalid dates
 
         if search:
             search_value = f"%{search.strip()}%"
