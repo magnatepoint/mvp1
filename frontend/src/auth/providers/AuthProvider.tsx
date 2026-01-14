@@ -11,6 +11,7 @@ import {
 } from 'react'
 import type { AuthError, Session, User } from '@supabase/supabase-js'
 import { supabase } from '../supabaseClient'
+import { env } from '../../env'
 
 type AuthContextValue = {
   user: User | null
@@ -98,10 +99,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
+    const redirectTo = env.supabaseRedirectUrl ?? `${window.location.origin}/auth/callback`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo,
+        queryParams: {
+          prompt: 'select_account',
+        },
       },
     })
     return error

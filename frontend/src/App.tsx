@@ -1,3 +1,4 @@
+import type { AuthError } from '@supabase/supabase-js'
 import { useState } from 'react'
 import './App.css'
 import { LoginForm } from './auth/components/LoginForm'
@@ -27,10 +28,29 @@ function AppContent() {
   const [activeView, setActiveView] = useState<'console' | 'spendsense' | 'goals' | 'goalcompass' | 'budgetpilot' | 'moneymoments' | 'settings'>('console')
   const [navOpen, setNavOpen] = useState(false)
 
+  const getAuthErrorMessage = (error: AuthError, fallback: string) => {
+    const message = error.message?.trim()
+    if (!message) {
+      return fallback
+    }
+    const normalized = message.toLowerCase()
+    if (normalized.includes('invalid login credentials')) {
+      return 'Invalid email or password.'
+    }
+    if (normalized.includes('email not confirmed')) {
+      return 'Check your inbox to confirm your email before signing in.'
+    }
+    if (normalized.includes('email logins are disabled')) {
+      return 'Email/password sign-in is disabled for this project.'
+    }
+    return message
+  }
+
   const handleSignIn = async (email: string, password: string) => {
-    const error = await signIn(email, password)
+    const error = await signIn(email.trim(), password)
     if (error) {
-      throw new Error(error.message)
+      console.error('Supabase sign-in failed', error)
+      throw new Error(getAuthErrorMessage(error, 'Sign in failed.'))
     }
   }
 
@@ -43,16 +63,18 @@ function AppContent() {
   }
 
   const handleRegister = async (email: string, password: string) => {
-    const error = await signUp(email, password)
+    const error = await signUp(email.trim(), password)
     if (error) {
-      throw new Error(error.message)
+      console.error('Supabase sign-up failed', error)
+      throw new Error(getAuthErrorMessage(error, 'Registration failed.'))
     }
   }
 
   const handleGoogle = async () => {
     const error = await signInWithGoogle()
     if (error) {
-      throw new Error(error.message)
+      console.error('Supabase Google sign-in failed', error)
+      throw new Error(getAuthErrorMessage(error, 'Google sign-in failed.'))
     }
   }
 

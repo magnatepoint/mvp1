@@ -1,5 +1,6 @@
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const supabaseRedirectUrl = import.meta.env.VITE_SUPABASE_REDIRECT_URL as string | undefined
 const apiBaseUrl =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'https://api.monytix.ai'
 
@@ -10,6 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const env = {
   supabaseUrl,
   supabaseAnonKey,
+  supabaseRedirectUrl,
   apiBaseUrl,
 }
 
