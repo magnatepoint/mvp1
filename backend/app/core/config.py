@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     google_application_credentials: str | None = Field(
         default=None, alias="GOOGLE_APPLICATION_CREDENTIALS"
     )
+    google_credentials_json: str | None = Field(
+        default=None, alias="GOOGLE_CREDENTIALS_JSON"
+    )
     
     # Base directory for models and data
     base_dir: Path = Field(default=BACKEND_DIR, alias="BASE_DIR")
@@ -54,7 +57,36 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return cached settings instance."""
     try:
-        return Settings()
+        settings = Settings()
+        
+        # Handle GOOGLE_CREDENTIALS_JSON -> GOOGLE_APPLICATION_CREDENTIALS file
+        if settings.google_credentials_json:
+            import json
+            import tempfile
+            import os
+            
+            try:
+                # Validate JSON first
+                creds_dict = json.loads(settings.google_credentials_json)
+                
+                # Write to specific temp file so it persists for this run
+                # Using /tmp/gcp_creds.json or similar could be risky if concurrent runs,
+                # but valid for container usage.
+                # Safer: NamedTemporaryFile with delete=False
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                    json.dump(creds_dict, tmp)
+                    tmp_path = tmp.name
+                
+                settings.google_application_credentials = tmp_path
+                # Set env var for Google client libraries that read os.environ directly
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp_path
+                
+            except Exception as e:
+                # Log invalid JSON but don't crash app startup immediately?
+                # Or maybe we should crash. For now, print error.
+                print(f"WARNING: Failed to process GOOGLE_CREDENTIALS_JSON: {e}")
+
+        return settings
     except ValidationError as exc:  # pragma: no cover - startup validation helper
         missing = ", ".join(err["loc"][0] for err in exc.errors())
         raise RuntimeError(
