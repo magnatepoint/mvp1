@@ -9,6 +9,6 @@ class Env {
   static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3YWd0aWtweGJoanJmZm9scnFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3ODE0NDksImV4cCI6MjA3NDM1NzQ0OX0.cYevGkIj1HkjKv7iC14TgR7ItGF6YnXJi5Qw6ONYmcQ';
   
   // API configuration
-  static const String apiBaseUrl = 'https://api.monytix.ai';
+  static const String apiBaseUrl = 'http://bwkcw0s0g0csk8cg8o88ckoc.192.168.68.113.sslip.io';
 }
 
