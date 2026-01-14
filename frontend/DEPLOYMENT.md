@@ -25,7 +25,6 @@ You must configure the following environment variables in **Settings > Environme
 - `VITE_API_URL`: The URL of your backend API (e.g., `https://api.yourdomain.com/v1`).
 - `VITE_SUPABASE_URL`: Your Supabase Project URL.
 - `VITE_SUPABASE_ANON_KEY`: Your Supabase Anonymous Key.
-- `VITE_SUPABASE_REDIRECT_URL`: Optional override for OAuth callback (e.g., `https://mvp.monytix.ai/auth/callback`).
 
 ## Routing
 

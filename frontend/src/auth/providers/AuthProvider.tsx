@@ -34,16 +34,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const url = new URL(window.location.href)
       const code = url.searchParams.get('code')
       const errorDescription = url.searchParams.get('error_description')
+      const error = url.searchParams.get('error')
 
-      if (errorDescription) {
-        console.error('Supabase OAuth error:', decodeURIComponent(errorDescription))
+      // Check for OAuth errors first
+      if (error || errorDescription) {
+        const errorMsg = errorDescription 
+          ? decodeURIComponent(errorDescription) 
+          : error || 'OAuth authentication failed'
+        console.error('Supabase OAuth error:', errorMsg)
+        // Clear error params from URL
+        window.history.replaceState({}, document.title, window.location.pathname)
+        return
       }
 
       if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (error) {
-          console.error('Failed to exchange OAuth code for session', error)
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+        if (exchangeError) {
+          console.error('Failed to exchange OAuth code for session', exchangeError)
         } else {
+          // Clear code from URL on success
           window.history.replaceState({}, document.title, window.location.pathname)
         }
         return
@@ -56,13 +65,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const refreshToken = hashParams.get('refresh_token')
 
         if (accessToken && refreshToken) {
-          const { error } = await supabase.auth.setSession({
+          const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           })
-          if (error) {
-            console.error('Failed to set session from hash tokens', error)
+          if (sessionError) {
+            console.error('Failed to set session from hash tokens', sessionError)
           } else {
+            // Clear hash from URL on success
             window.history.replaceState({}, document.title, window.location.pathname)
           }
         }
@@ -99,7 +109,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
-    const redirectTo = env.supabaseRedirectUrl ?? `${window.location.origin}/auth/callback`
+    // Use root path since callback handler runs on all pages
+    const redirectTo = env.supabaseRedirectUrl ?? `${window.location.origin}/`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
