@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import './SpendSensePanel.css'
 import { env } from '../../env'
 import { SkeletonLoader, SkeletonTable } from '../../components/SkeletonLoader'
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 import { AIInsights } from '../../components/AIInsights'
 import { BudgetTracker } from '../../components/BudgetTracker'
 import { ExportButton } from '../../components/ExportButton'
@@ -212,7 +212,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
       setMerchantName(transaction.merchant ?? '')
       setSelectedChannel(transaction.channel ?? '')
       // Fetch categories
-      fetch(`${env.apiBaseUrl}/spendsense/categories`, {
+      fetch(`${env.apiBaseUrl}/v1/spendsense/categories`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
         .then((res) => res.json())
@@ -223,7 +223,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
           if (currentCat) {
             setSelectedCategory(currentCat.code)
             // Fetch subcategories for this category
-            fetch(`${env.apiBaseUrl}/spendsense/subcategories?category_code=${currentCat.code}`, {
+            fetch(`${env.apiBaseUrl}/v1/spendsense/subcategories?category_code=${currentCat.code}`, {
               headers: { Authorization: `Bearer ${session.access_token}` },
             })
               .then((res) => res.json())
@@ -252,7 +252,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
     setSaving(true)
     setError(null)
     try {
-      const response = await fetch(`${env.apiBaseUrl}/spendsense/transactions/${transaction.txn_id}`, {
+      const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/transactions/${transaction.txn_id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -282,7 +282,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
     setDeleting(true)
     setError(null)
     try {
-      const response = await fetch(`${env.apiBaseUrl}/spendsense/transactions/${transaction.txn_id}`, {
+      const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/transactions/${transaction.txn_id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -339,7 +339,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
               setSelectedCategory(e.target.value)
               setSelectedSubcategory('')
               if (e.target.value) {
-                fetch(`${env.apiBaseUrl}/spendsense/subcategories?category_code=${e.target.value}`, {
+                fetch(`${env.apiBaseUrl}/v1/spendsense/subcategories?category_code=${e.target.value}`, {
                   headers: { Authorization: `Bearer ${session.access_token}` },
                 })
                   .then((res) => res.json())
@@ -390,10 +390,10 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
     )
   }
 
-    const bankInfo = transaction.bank_code ? BANK_META[transaction.bank_code] : undefined
-    const channelInfo = transaction.channel ? CHANNEL_META[transaction.channel] : undefined
+  const bankInfo = transaction.bank_code ? BANK_META[transaction.bank_code] : undefined
+  const channelInfo = transaction.channel ? CHANNEL_META[transaction.channel] : undefined
 
-    return (
+  return (
     <>
       <tr className={expanded ? 'spendsense__row--expanded' : ''}>
         <td>
@@ -406,26 +406,26 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
           </button>
           {new Date(transaction.txn_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
         </td>
-          <td>
-            <div className="spendsense__merchant">
-              <div className="spendsense__merchantName">{transaction.merchant ?? '—'}</div>
-              {(bankInfo || channelInfo) && (
-                <div className="spendsense__merchantMeta">
-                  {bankInfo && (
-                    <span className="spendsense__badge">
-                      {bankInfo.logo && <span className="spendsense__badgeIcon">{bankInfo.logo}</span>}
-                      {bankInfo.name}
-                    </span>
-                  )}
-                  {channelInfo && (
-                    <span className={`spendsense__chip spendsense__chip--${transaction.channel}`}>
-                      {channelInfo.label ?? transaction.channel}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          </td>
+        <td>
+          <div className="spendsense__merchant">
+            <div className="spendsense__merchantName">{transaction.merchant ?? '—'}</div>
+            {(bankInfo || channelInfo) && (
+              <div className="spendsense__merchantMeta">
+                {bankInfo && (
+                  <span className="spendsense__badge">
+                    {bankInfo.logo && <span className="spendsense__badgeIcon">{bankInfo.logo}</span>}
+                    {bankInfo.name}
+                  </span>
+                )}
+                {channelInfo && (
+                  <span className={`spendsense__chip spendsense__chip--${transaction.channel}`}>
+                    {channelInfo.label ?? transaction.channel}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </td>
         <td>{formatLabel(transaction.category)}</td>
         <td>{formatLabel(transaction.subcategory)}</td>
         <td className={transaction.direction === 'debit' ? 'amount-debit' : 'amount-credit'}>
@@ -559,7 +559,7 @@ export function SpendSensePanel({ session }: Props) {
       if (appliedFilters.subcategory) params.append('subcategory_code', appliedFilters.subcategory)
       if (appliedFilters.channel) params.append('channel', appliedFilters.channel)
 
-      fetch(`${env.apiBaseUrl}/spendsense/transactions?${params.toString()}`, {
+      fetch(`${env.apiBaseUrl}/v1/spendsense/transactions?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -597,7 +597,7 @@ export function SpendSensePanel({ session }: Props) {
   }, [currentPage, filters, fetchTransactions])
 
   useEffect(() => {
-    fetch(`${env.apiBaseUrl}/spendsense/categories`, {
+    fetch(`${env.apiBaseUrl}/v1/spendsense/categories`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then((res) => res.json())
@@ -607,7 +607,7 @@ export function SpendSensePanel({ session }: Props) {
 
   useEffect(() => {
     if (filters.category) {
-      fetch(`${env.apiBaseUrl}/spendsense/subcategories?category_code=${filters.category}`, {
+      fetch(`${env.apiBaseUrl}/v1/spendsense/subcategories?category_code=${filters.category}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
         .then((res) => res.json())
@@ -621,7 +621,7 @@ export function SpendSensePanel({ session }: Props) {
   const fetchKpis = useCallback(() => {
     setKpiLoading(true)
     setKpiError(null)
-    return fetch(`${env.apiBaseUrl}/spendsense/kpis`, {
+    return fetch(`${env.apiBaseUrl}/v1/spendsense/kpis`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then((res) => {
@@ -659,7 +659,7 @@ export function SpendSensePanel({ session }: Props) {
       if (pdfPassword.trim()) {
         formData.append('password', pdfPassword.trim())
       }
-      const response = await fetch(`${env.apiBaseUrl}/spendsense/uploads/file`, {
+      const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/uploads/file`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -699,18 +699,18 @@ export function SpendSensePanel({ session }: Props) {
     [],
   )
   const wantsRatio = Math.min(1, Math.max(0, kpis?.wants_gauge?.ratio ?? 0))
-  const gaugeDegrees = wantsRatio * 360
+  // const gaugeDegrees = wantsRatio * 360 // Unused
   const wantsPercent = Number.isNaN(wantsRatio) ? 0 : Math.round(wantsRatio * 100)
   const gaugeClass = kpis?.wants_gauge?.threshold_crossed ? 'is-alert' : ''
   const lootDrop = kpis?.recent_loot_drop
   const lootRarity = lootDrop?.rarity ?? 'common'
   const lootTimestamp = lootDrop?.occurred_at
     ? new Date(lootDrop.occurred_at).toLocaleString('en-IN', {
-        month: 'short',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
     : null
   const bestMonth = kpis?.best_month
   const bestMonthDeltaLabel = bestMonth
@@ -839,7 +839,7 @@ export function SpendSensePanel({ session }: Props) {
                     {kpis?.month ? formatMonthLabel(kpis.month) : 'This month'}
                   </div>
                 </div>
-                
+
                 <div className="spendsense__overviewCard spendsense__overviewCard--expenses">
                   <div className="spendsense__overviewCardHeader">
                     <span className="spendsense__overviewCardLabel">Total Expenses</span>
@@ -852,7 +852,7 @@ export function SpendSensePanel({ session }: Props) {
                     Needs + Wants
                   </div>
                 </div>
-                
+
                 <div className="spendsense__overviewCard spendsense__overviewCard--savings">
                   <div className="spendsense__overviewCardHeader">
                     <span className="spendsense__overviewCardLabel">Net Savings</span>
@@ -860,7 +860,7 @@ export function SpendSensePanel({ session }: Props) {
                   </div>
                   <div className="spendsense__overviewCardValue">
                     {currencyFormatter.format(
-                      (kpis?.income_amount ?? 0) - 
+                      (kpis?.income_amount ?? 0) -
                       ((kpis?.needs_amount ?? 0) + (kpis?.wants_amount ?? 0))
                     )}
                   </div>
@@ -868,7 +868,7 @@ export function SpendSensePanel({ session }: Props) {
                     Income - Expenses
                   </div>
                 </div>
-                
+
                 <div className="spendsense__overviewCard spendsense__overviewCard--assets">
                   <div className="spendsense__overviewCardHeader">
                     <span className="spendsense__overviewCardLabel">Assets</span>
@@ -884,7 +884,7 @@ export function SpendSensePanel({ session }: Props) {
               </>
             )}
           </div>
-          
+
           {/* Legacy KPI Cards */}
           <div className="spendsense__pipeline">
             {kpiLoading ? (
@@ -922,7 +922,7 @@ export function SpendSensePanel({ session }: Props) {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
@@ -1075,9 +1075,8 @@ export function SpendSensePanel({ session }: Props) {
                     <div className="spendsense__categoryMeta">
                       <strong>{currencyFormatter.format(cat.spend_amount ?? 0)}</strong>
                       <span
-                        className={`spendsense__trend ${
-                          cat.change_pct === null ? '' : cat.change_pct >= 0 ? 'is-up' : 'is-down'
-                        }`}
+                        className={`spendsense__trend ${cat.change_pct === null ? '' : cat.change_pct >= 0 ? 'is-up' : 'is-down'
+                          }`}
                       >
                         {cat.change_pct === null ? '—' : formatPercent(cat.change_pct)}
                       </span>
@@ -1099,243 +1098,242 @@ export function SpendSensePanel({ session }: Props) {
           </div>
         </div>
       )}
-      
+
       {activeTab === 'transactions' && (
-      <div className="spendsense__transactions">
-        <header className="spendsense__transactionsHeader">
-          <div>
-            <p className="eyebrow">Transactions</p>
-            <h3>Latest categorized activity</h3>
-          </div>
-          <div className="spendsense__transactionsActions">
-            <ExportButton
-              data={transactions.map((t) => ({
-                date: t.txn_date,
-                merchant: t.merchant,
-                category: t.category,
-                subcategory: t.subcategory,
-                amount: t.amount,
-                direction: t.direction,
-                channel: t.channel,
-                bank: t.bank_code,
-              }))}
-              filename="transactions"
-              onExport={(format) => {
-                // Toast will be shown by ExportButton if needed
-              }}
-            />
-            <button className="ghost-button" onClick={() => setFilterPanelOpen((prev) => !prev)}>
-              {filterPanelOpen ? 'Hide Filters' : 'Filter'}
-            </button>
-          </div>
-        </header>
-        {filterPanelOpen && (
-          <div className="spendsense__filters">
-            <div className="spendsense__filterGroup">
-              <label>Search</label>
-              <div className="spendsense__searchWrapper">
-                <Search size={18} className="spendsense__searchIcon" />
-                <input
-                  type="text"
-                  className="input-field spendsense__searchInput"
-                  placeholder="Search merchant, category, or description..."
-                  value={filters.search}
-                  onChange={(event) => handleFilterChange({ search: event.target.value })}
-                />
-                {filters.search && (
-                  <button
-                    className="spendsense__searchClear"
-                    onClick={() => handleFilterChange({ search: '' })}
-                    aria-label="Clear search"
-                  >
-                    <XIcon size={16} />
-                  </button>
-                )}
-              </div>
+        <div className="spendsense__transactions">
+          <header className="spendsense__transactionsHeader">
+            <div>
+              <p className="eyebrow">Transactions</p>
+              <h3>Latest categorized activity</h3>
             </div>
-            <div className="spendsense__filterGroup">
-              <label>Category</label>
-              <select
-                className="input-field"
-                value={filters.category}
-                onChange={(event) =>
-                  handleFilterChange({ category: event.target.value, subcategory: '' })
-                }
-              >
-                <option value="">All categories</option>
-                {filterCategories.map((cat) => (
-                  <option key={cat.code} value={cat.code}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="spendsense__filterGroup">
-              <label>Subcategory</label>
-              <select
-                className="input-field"
-                value={filters.subcategory}
-                onChange={(event) => handleFilterChange({ subcategory: event.target.value })}
-                disabled={!filters.category}
-              >
-                <option value="">All subcategories</option>
-                {filterSubcategories.map((sub) => (
-                  <option key={sub.code} value={sub.code}>
-                    {sub.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="spendsense__filterGroup">
-              <label>Channel</label>
-              <select
-                className="input-field"
-                value={filters.channel}
-                onChange={(event) => handleFilterChange({ channel: event.target.value })}
-              >
-                <option value="">All channels</option>
-                {CHANNEL_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="spendsense__filterActions">
-              <button className="ghost-button" onClick={handleClearFilters}>
-                Clear filters
+            <div className="spendsense__transactionsActions">
+              <ExportButton
+                data={transactions.map((t) => ({
+                  date: t.txn_date,
+                  merchant: t.merchant,
+                  category: t.category,
+                  subcategory: t.subcategory,
+                  amount: t.amount,
+                  direction: t.direction,
+                  channel: t.channel,
+                  bank: t.bank_code,
+                }))}
+                filename="transactions"
+                onExport={() => {
+                  // Toast will be shown by ExportButton if needed
+                }}
+              />
+              <button className="ghost-button" onClick={() => setFilterPanelOpen((prev) => !prev)}>
+                {filterPanelOpen ? 'Hide Filters' : 'Filter'}
               </button>
             </div>
-          </div>
-        )}
-        {uploadError ? <p className="error-message">{uploadError}</p> : null}
-        {loading ? (
-          <>
-            <SkeletonTable rows={8} columns={6} />
-            <div className="spendsense__transactionCards">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="skeleton-card">
-                  <SkeletonLoader height={20} width="60%" />
-                  <SkeletonLoader height={32} width="100%" className="skeleton-card-spacing" />
-                  <SkeletonLoader height={16} width="80%" variant="text" lines={2} />
-                </div>
-              ))}
-            </div>
-          </>
-        ) : error ? (
-          <p className="error-message">{error}</p>
-        ) : (
-          <>
-            <table className="spendsense__table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Merchant</th>
-                  <th>Category</th>
-                  <th>Subcategory</th>
-                  <th className="spendsense__amountCol">Amount</th>
-                  <th className="spendsense__actionsCol">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(transactions || []).map((txn) => (
-                  <TransactionRow
-                    key={txn.txn_id}
-                    transaction={txn}
-                    session={session}
-                    onUpdate={() => fetchTransactions(currentPage)}
-                    onDelete={() => {
-                      setTransactions((prev) => prev.filter((t) => t.txn_id !== txn.txn_id))
-                      setTotalCount((prev) => Math.max(0, prev - 1))
-                    }}
+          </header>
+          {filterPanelOpen && (
+            <div className="spendsense__filters">
+              <div className="spendsense__filterGroup">
+                <label>Search</label>
+                <div className="spendsense__searchWrapper">
+                  <Search size={18} className="spendsense__searchIcon" />
+                  <input
+                    type="text"
+                    className="input-field spendsense__searchInput"
+                    placeholder="Search merchant, category, or description..."
+                    value={filters.search}
+                    onChange={(event) => handleFilterChange({ search: event.target.value })}
                   />
-                ))}
-              </tbody>
-            </table>
-            <div className="spendsense__transactionCards">
-              {(transactions || []).map((txn) => (
-                <div key={txn.txn_id} className="spendsense__transactionCard">
-                  <div className="spendsense__transactionCardHeader">
-                    <div className="spendsense__transactionCardMerchant">
-                      <div className="spendsense__transactionCardMerchantName">
-                        {txn.merchant || '—'}
-                      </div>
-                      <div className="spendsense__transactionCardMeta">
-                        <span className="spendsense__transactionCardDate">
-                          {new Date(txn.txn_date).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                          })}
-                        </span>
-                        {txn.category && (
-                          <span className="spendsense__badge">{formatLabel(txn.category)}</span>
-                        )}
-                        {txn.channel && (
-                          <span className="spendsense__chip">{formatLabel(txn.channel)}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div
-                      className={`spendsense__transactionCardAmount ${
-                        txn.direction === 'credit' ? 'amount-credit' : 'amount-debit'
-                      }`}
+                  {filters.search && (
+                    <button
+                      className="spendsense__searchClear"
+                      onClick={() => handleFilterChange({ search: '' })}
+                      aria-label="Clear search"
                     >
-                      {txn.direction === 'credit' ? '+' : '-'}
-                      {currencyFormatter.format(Math.abs(txn.amount))}
+                      <XIcon size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="spendsense__filterGroup">
+                <label>Category</label>
+                <select
+                  className="input-field"
+                  value={filters.category}
+                  onChange={(event) =>
+                    handleFilterChange({ category: event.target.value, subcategory: '' })
+                  }
+                >
+                  <option value="">All categories</option>
+                  {filterCategories.map((cat) => (
+                    <option key={cat.code} value={cat.code}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="spendsense__filterGroup">
+                <label>Subcategory</label>
+                <select
+                  className="input-field"
+                  value={filters.subcategory}
+                  onChange={(event) => handleFilterChange({ subcategory: event.target.value })}
+                  disabled={!filters.category}
+                >
+                  <option value="">All subcategories</option>
+                  {filterSubcategories.map((sub) => (
+                    <option key={sub.code} value={sub.code}>
+                      {sub.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="spendsense__filterGroup">
+                <label>Channel</label>
+                <select
+                  className="input-field"
+                  value={filters.channel}
+                  onChange={(event) => handleFilterChange({ channel: event.target.value })}
+                >
+                  <option value="">All channels</option>
+                  {CHANNEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="spendsense__filterActions">
+                <button className="ghost-button" onClick={handleClearFilters}>
+                  Clear filters
+                </button>
+              </div>
+            </div>
+          )}
+          {uploadError ? <p className="error-message">{uploadError}</p> : null}
+          {loading ? (
+            <>
+              <SkeletonTable rows={8} columns={6} />
+              <div className="spendsense__transactionCards">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="skeleton-card">
+                    <SkeletonLoader height={20} width="60%" />
+                    <SkeletonLoader height={32} width="100%" className="skeleton-card-spacing" />
+                    <SkeletonLoader height={16} width="80%" variant="text" lines={2} />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : error ? (
+            <p className="error-message">{error}</p>
+          ) : (
+            <>
+              <table className="spendsense__table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Merchant</th>
+                    <th>Category</th>
+                    <th>Subcategory</th>
+                    <th className="spendsense__amountCol">Amount</th>
+                    <th className="spendsense__actionsCol">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(transactions || []).map((txn) => (
+                    <TransactionRow
+                      key={txn.txn_id}
+                      transaction={txn}
+                      session={session}
+                      onUpdate={() => fetchTransactions(currentPage)}
+                      onDelete={() => {
+                        setTransactions((prev) => prev.filter((t) => t.txn_id !== txn.txn_id))
+                        setTotalCount((prev) => Math.max(0, prev - 1))
+                      }}
+                    />
+                  ))}
+                </tbody>
+              </table>
+              <div className="spendsense__transactionCards">
+                {(transactions || []).map((txn) => (
+                  <div key={txn.txn_id} className="spendsense__transactionCard">
+                    <div className="spendsense__transactionCardHeader">
+                      <div className="spendsense__transactionCardMerchant">
+                        <div className="spendsense__transactionCardMerchantName">
+                          {txn.merchant || '—'}
+                        </div>
+                        <div className="spendsense__transactionCardMeta">
+                          <span className="spendsense__transactionCardDate">
+                            {new Date(txn.txn_date).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                          </span>
+                          {txn.category && (
+                            <span className="spendsense__badge">{formatLabel(txn.category)}</span>
+                          )}
+                          {txn.channel && (
+                            <span className="spendsense__chip">{formatLabel(txn.channel)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div
+                        className={`spendsense__transactionCardAmount ${txn.direction === 'credit' ? 'amount-credit' : 'amount-debit'
+                          }`}
+                      >
+                        {txn.direction === 'credit' ? '+' : '-'}
+                        {currencyFormatter.format(Math.abs(txn.amount))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-        {!loading && !error && totalCount > 0 && (
-          <div className="spendsense__pagination">
-            <div className="spendsense__paginationInfo">
-              Showing {((currentPage - 1) * PAGE_SIZE) + 1} - {Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount}
-            </div>
-            <div className="spendsense__paginationControls">
-              <button
-                className="ghost-button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <div className="spendsense__pageNumbers">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum: number
-                  if (totalPages <= 5) {
-                    pageNum = i + 1
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i
-                  } else {
-                    pageNum = currentPage - 2 + i
-                  }
-                  return (
-                    <button
-                      key={pageNum}
-                      className={`ghost-button ${currentPage === pageNum ? 'active' : ''}`}
-                      onClick={() => setCurrentPage(pageNum)}
-                    >
-                      {pageNum}
-                    </button>
-                  )
-                })}
+                ))}
               </div>
-              <button
-                className="ghost-button"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
+            </>
+          )}
+          {!loading && !error && totalCount > 0 && (
+            <div className="spendsense__pagination">
+              <div className="spendsense__paginationInfo">
+                Showing {((currentPage - 1) * PAGE_SIZE) + 1} - {Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount}
+              </div>
+              <div className="spendsense__paginationControls">
+                <button
+                  className="ghost-button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <div className="spendsense__pageNumbers">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number
+                    if (totalPages <= 5) {
+                      pageNum = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        className={`ghost-button ${currentPage === pageNum ? 'active' : ''}`}
+                        onClick={() => setCurrentPage(pageNum)}
+                      >
+                        {pageNum}
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  className="ghost-button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       )}
     </section>
   )

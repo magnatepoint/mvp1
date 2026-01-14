@@ -44,25 +44,7 @@ export function GoalSelectionStep({ catalog, recommended, onSelect, onBack }: Pr
   const [filter, setFilter] = useState<'all' | 'short_term' | 'medium_term' | 'long_term'>('all')
 
   // Group goals by horizon
-  const groupedGoals = useMemo(() => {
-    const groups: Record<string, GoalCatalogItem[]> = {
-      short_term: [],
-      medium_term: [],
-      long_term: [],
-      other: [],
-    }
 
-    catalog.forEach((goal) => {
-      const horizon = goal.default_horizon
-      if (horizon in groups) {
-        groups[horizon].push(goal)
-      } else {
-        groups.other.push(goal)
-      }
-    })
-
-    return groups
-  }, [catalog])
 
   const filteredGoals = useMemo(() => {
     if (filter === 'all') {
@@ -156,9 +138,8 @@ export function GoalSelectionStep({ catalog, recommended, onSelect, onBack }: Pr
           return (
             <div
               key={key}
-              className={`goal-card glass-card ${isSelected ? 'goal-card--selected' : ''} ${
-                isRecommended ? 'goal-card--recommended' : ''
-              }`}
+              className={`goal-card glass-card ${isSelected ? 'goal-card--selected' : ''} ${isRecommended ? 'goal-card--recommended' : ''
+                }`}
               onClick={() => toggleGoal(goal)}
             >
               <div className="goal-card__header">

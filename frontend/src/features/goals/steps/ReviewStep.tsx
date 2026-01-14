@@ -88,7 +88,7 @@ export function ReviewStep({ lifeContext, selectedGoals, onSubmit, onBack, submi
                 </div>
                 <div className="goal-review-row">
                   <span>Target Date:</span>
-                  <strong>{formatDate(goal.target_date)}</strong>
+                  <strong>{formatDate(goal.target_date || null)}</strong>
                 </div>
                 <div className="goal-review-row">
                   <span>Importance:</span>

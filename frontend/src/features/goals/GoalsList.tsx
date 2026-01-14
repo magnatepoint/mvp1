@@ -30,7 +30,7 @@ export function GoalsList({ session, onEdit }: Props) {
       } catch (err) {
         console.error('Error fetching goals:', err)
         let errorMessage = 'Failed to load goals'
-        
+
         if (err instanceof Error) {
           errorMessage = err.message
         } else if (typeof err === 'string') {
@@ -43,7 +43,7 @@ export function GoalsList({ session, onEdit }: Props) {
             errorMessage = String(errObj.detail)
           }
         }
-        
+
         setError(errorMessage)
       } finally {
         setLoading(false)
@@ -188,7 +188,7 @@ export function GoalsList({ session, onEdit }: Props) {
                     <Calendar size={14} />
                     Target Date
                   </span>
-                  <strong>{formatDate(goal.target_date)}</strong>
+                  <strong>{formatDate(goal.target_date || null)}</strong>
                 </div>
                 {goal.priority_rank && (
                   <div className="goal-detail-row">

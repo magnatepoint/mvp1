@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Target, TrendingUp, Calendar, Edit2, Trash2, CheckCircle2, Sparkles } from 'lucide-react'
-import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts'
+// import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { GoalDetailModal } from '../../components/GoalDetailModal'
 import { fetchGoalsProgress, fetchGoals } from '../../api/goals'
@@ -31,7 +31,7 @@ export function GoalCompassScreen({ session }: Props) {
       } catch (err) {
         console.error('Error fetching goals progress:', err)
         let errorMessage = 'Failed to load progress'
-        
+
         if (err instanceof Error) {
           errorMessage = err.message
         } else if (typeof err === 'string') {
@@ -47,7 +47,7 @@ export function GoalCompassScreen({ session }: Props) {
             errorMessage = 'An unexpected error occurred'
           }
         }
-        
+
         setError(errorMessage)
         setGoals([])
       } finally {
@@ -178,14 +178,14 @@ export function GoalCompassScreen({ session }: Props) {
                 <div className="goalcompass-overview-value">
                   {goals.filter((g) => g.projected_completion_date).length > 0
                     ? formatDate(
-                        goals
-                          .filter((g) => g.projected_completion_date)
-                          .sort(
-                            (a, b) =>
-                              new Date(a.projected_completion_date!).getTime() -
-                              new Date(b.projected_completion_date!).getTime()
-                          )[0]?.projected_completion_date || null
-                      )
+                      goals
+                        .filter((g) => g.projected_completion_date)
+                        .sort(
+                          (a, b) =>
+                            new Date(a.projected_completion_date!).getTime() -
+                            new Date(b.projected_completion_date!).getTime()
+                        )[0]?.projected_completion_date || null
+                    )
                     : '—'}
                 </div>
               </div>
@@ -207,16 +207,16 @@ export function GoalCompassScreen({ session }: Props) {
                   onClick={async () => {
                     setSelectedGoal(goal)
                     setIsModalOpen(true)
-                    
+
                     // Fetch full goal details if available
                     try {
                       const allGoals = await fetchGoals(session)
                       const fullGoal = allGoals.find((g: GoalResponse) => g.goal_id === goal.goal_id)
-                        if (fullGoal) {
-                          setGoalDetails({
-                            estimated_cost: fullGoal.estimated_cost,
-                            target_date: fullGoal.target_date,
-                          })
+                      if (fullGoal) {
+                        setGoalDetails({
+                          estimated_cost: fullGoal.estimated_cost,
+                          target_date: fullGoal.target_date,
+                        })
                       }
                     } catch (err) {
                       // Silently fail - we'll use calculated values
@@ -324,7 +324,7 @@ export function GoalCompassScreen({ session }: Props) {
                         Projected Completion
                       </span>
                       <strong className="progress-value">
-                        {formatDate(goal.projected_completion_date)}
+                        {formatDate(goal.projected_completion_date ?? null)}
                       </strong>
                     </div>
                   </div>
@@ -366,7 +366,7 @@ export function GoalCompassScreen({ session }: Props) {
           progress_pct: selectedGoal.progress_pct,
           current_savings_close: selectedGoal.current_savings_close,
           remaining_amount: selectedGoal.remaining_amount,
-          projected_completion_date: selectedGoal.projected_completion_date,
+          projected_completion_date: selectedGoal.projected_completion_date || null,
           milestones: selectedGoal.milestones,
           estimated_cost: goalDetails?.estimated_cost,
           target_date: goalDetails?.target_date || null,

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react'
 import './Toast.css'
 
@@ -31,9 +32,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const showToast = useCallback((message: string, type: ToastType = 'info', duration = 3000) => {
     const id = Math.random().toString(36).substring(7)
     const toast: Toast = { id, message, type, duration }
-    
+
     setToasts((prev) => [...prev, toast])
-    
+
     if (duration > 0) {
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id))

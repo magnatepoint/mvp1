@@ -16,7 +16,7 @@ export function SpendSenseScreen({ session }: Props) {
     setTriggering(true)
     setJobMessage(null)
     try {
-      const response = await fetch(`${env.apiBaseUrl}/spendsense/re-enrich`, {
+      const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/re-enrich`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,

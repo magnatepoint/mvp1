@@ -38,7 +38,7 @@ export function LifeContextStep({ initialData, onSubmit, onSkip }: Props) {
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {}
-    
+
     if (!formData.age_band) newErrors.age_band = 'Age band is required'
     if (!formData.housing) newErrors.housing = 'Housing status is required'
     if (!formData.employment) newErrors.employment = 'Employment type is required'
@@ -67,7 +67,7 @@ export function LifeContextStep({ initialData, onSubmit, onSkip }: Props) {
           id="age_band"
           className="input-field"
           value={formData.age_band}
-          onChange={(e) => setFormData({ ...formData, age_band: e.target.value })}
+          onChange={(e) => setFormData({ ...formData, age_band: e.target.value as LifeContextRequest['age_band'] })}
         >
           <option value="">Select age range</option>
           <option value="18-24">18-24</option>
@@ -102,7 +102,7 @@ export function LifeContextStep({ initialData, onSubmit, onSkip }: Props) {
           id="employment"
           className="input-field"
           value={formData.employment}
-          onChange={(e) => setFormData({ ...formData, employment: e.target.value })}
+          onChange={(e) => setFormData({ ...formData, employment: e.target.value as LifeContextRequest['employment'] })}
         >
           <option value="">Select employment type</option>
           <option value="salaried">Salaried</option>
@@ -120,7 +120,7 @@ export function LifeContextStep({ initialData, onSubmit, onSkip }: Props) {
           id="income_regularity"
           className="input-field"
           value={formData.income_regularity}
-          onChange={(e) => setFormData({ ...formData, income_regularity: e.target.value })}
+          onChange={(e) => setFormData({ ...formData, income_regularity: e.target.value as LifeContextRequest['income_regularity'] })}
         >
           <option value="">Select income stability</option>
           <option value="very_stable">Very Stable</option>

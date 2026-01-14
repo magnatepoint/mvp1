@@ -1,5 +1,5 @@
 import { X, Calendar, TrendingUp, Target, CheckCircle2, Clock } from 'lucide-react'
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, BarChart, Bar } from 'recharts'
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts'
 import { SkeletonLoader } from './SkeletonLoader'
 import './GoalDetailModal.css'
 
@@ -43,7 +43,7 @@ export function GoalDetailModal({ goal, isOpen, onClose, loading = false }: Goal
   // Calculate monthly contribution needed
   const calculateMonthlyContribution = () => {
     if (!goal || !goal.projected_completion_date || goal.remaining_amount <= 0) return null
-    
+
     const today = new Date()
     const completionDate = new Date(goal.projected_completion_date)
     const monthsRemaining = Math.max(
@@ -52,7 +52,7 @@ export function GoalDetailModal({ goal, isOpen, onClose, loading = false }: Goal
         (completionDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30)
       )
     )
-    
+
     return goal.remaining_amount / monthsRemaining
   }
 
@@ -61,7 +61,7 @@ export function GoalDetailModal({ goal, isOpen, onClose, loading = false }: Goal
   // Generate timeline data for visualization
   const generateTimelineData = () => {
     if (!goal || !goal.projected_completion_date) return []
-    
+
     const today = new Date()
     const completionDate = new Date(goal.projected_completion_date)
     const monthsRemaining = Math.max(
@@ -70,31 +70,31 @@ export function GoalDetailModal({ goal, isOpen, onClose, loading = false }: Goal
         (completionDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30)
       )
     )
-    
+
     const totalGoalAmount = goal.estimated_cost || goal.current_savings_close + goal.remaining_amount
-    const data = []
+    const data: { month: string; cumulative: number; target: number; milestone?: any }[] = []
     let cumulative = goal.current_savings_close
     const monthlyAmount = monthlyContribution || goal.remaining_amount / monthsRemaining
-    
+
     for (let i = 0; i <= Math.min(monthsRemaining, 12); i++) {
       const date = new Date(today)
       date.setMonth(date.getMonth() + i)
-      
+
       if (i > 0) {
         cumulative = Math.min(cumulative + monthlyAmount, totalGoalAmount)
       }
-      
+
       data.push({
         month: date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
         cumulative: Math.min(cumulative, totalGoalAmount),
         target: totalGoalAmount,
         milestone: [25, 50, 75, 100].find((m) => {
           const milestoneAmount = (totalGoalAmount * m) / 100
-          return cumulative >= milestoneAmount && (i === 0 || data[i - 1]?.cumulative < milestoneAmount)
+          return cumulative >= milestoneAmount && (i === 0 || (data[i - 1]?.cumulative || 0) < milestoneAmount)
         }),
       })
     }
-    
+
     return data
   }
 
@@ -103,18 +103,18 @@ export function GoalDetailModal({ goal, isOpen, onClose, loading = false }: Goal
   // Calculate milestone dates
   const calculateMilestoneDates = () => {
     if (!goal || !monthlyContribution || !goal.projected_completion_date) return []
-    
+
     const target = goal.estimated_cost || goal.current_savings_close + goal.remaining_amount
     const milestones = [25, 50, 75, 100]
     const today = new Date()
-    
+
     return milestones.map((milestone) => {
       const milestoneAmount = (target * milestone) / 100
       const remainingToMilestone = Math.max(0, milestoneAmount - goal.current_savings_close)
       const monthsToMilestone = Math.ceil(remainingToMilestone / monthlyContribution)
       const milestoneDate = new Date(today)
       milestoneDate.setMonth(milestoneDate.getMonth() + monthsToMilestone)
-      
+
       return {
         percentage: milestone,
         date: milestoneDate,
@@ -262,9 +262,8 @@ export function GoalDetailModal({ goal, isOpen, onClose, loading = false }: Goal
                       )}
                       {index < milestoneDates.length - 1 && (
                         <div
-                          className={`goal-detail-milestone-connector ${
-                            milestone.achieved ? 'goal-detail-milestone-connector--active' : ''
-                          }`}
+                          className={`goal-detail-milestone-connector ${milestone.achieved ? 'goal-detail-milestone-connector--active' : ''
+                            }`}
                         />
                       )}
                     </div>

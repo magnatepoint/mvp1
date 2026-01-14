@@ -4,7 +4,7 @@ import { fetchMoneyMoments, computeMoneyMoments, fetchNudges, evaluateNudges, pr
 import type { MoneyMoment, Nudge } from '../../types/moneymoments'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { useToast } from '../../components/Toast'
-import { TrendingUp, TrendingDown, AlertCircle, Info, Sparkles } from 'lucide-react'
+import { TrendingUp, AlertCircle, Info, Sparkles } from 'lucide-react'
 import './MoneyMomentsScreen.css'
 
 type Props = {
@@ -68,22 +68,22 @@ export const MoneyMomentsScreen: React.FC<Props> = ({ session }) => {
         console.warn('Signal computation failed (may not be critical):', err)
         // Continue even if signal computation fails
       }
-      
+
       // Then evaluate rules
       const evalResult = await evaluateNudges(session)
       showToast(`Evaluated ${evalResult.count} nudge candidates`, 'success')
-      
+
       // Then process and deliver
       const processResult = await processNudges(session, 10)
       showToast(`Processed and delivered ${processResult.count} nudges!`, 'success')
-      
+
       // Reload nudges
       void loadData()
     } catch (err) {
       console.error('Error processing nudges:', err)
-      const errorMessage = err instanceof Error 
-        ? (err as any).isNetworkError 
-          ? err.message 
+      const errorMessage = err instanceof Error
+        ? (err as any).isNetworkError
+          ? err.message
           : err.message
         : 'Failed to process nudges'
       showToast(errorMessage, 'error')
@@ -172,8 +172,8 @@ export const MoneyMomentsScreen: React.FC<Props> = ({ session }) => {
                     {moment.habit_id.includes('ratio') || moment.habit_id.includes('share')
                       ? `${(moment.value * 100).toFixed(1)}%`
                       : moment.habit_id.includes('count')
-                      ? `${moment.value.toFixed(0)}`
-                      : `₹${moment.value.toLocaleString('en-IN')}`}
+                        ? `${moment.value.toFixed(0)}`
+                        : `₹${moment.value.toLocaleString('en-IN')}`}
                   </span>
                   <span className="moment-habit-id">{moment.habit_id.replace(/_/g, ' ')}</span>
                 </div>

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Target, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Target, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 import './BudgetTracker.css'
 

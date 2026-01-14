@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Calendar, AlertTriangle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Calendar } from 'lucide-react'
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts'
 import './SpendingPredictions.css'
 
@@ -33,9 +33,9 @@ export function SpendingPredictions({ predictions = defaultPredictions, loading 
   const currentMonth = predictions.find((p) => !p.actual)
   const trend = currentMonth
     ? predictions
-        .filter((p) => p.actual)
-        .slice(-3)
-        .reduce((acc, p) => acc + (p.actual! - p.predicted) / p.predicted, 0) / 3
+      .filter((p) => p.actual)
+      .slice(-3)
+      .reduce((acc, p) => acc + (p.actual! - p.predicted) / p.predicted, 0) / 3
     : 0
 
   if (loading) {
@@ -122,7 +122,7 @@ export function SpendingPredictions({ predictions = defaultPredictions, loading 
             </div>
           </div>
         )}
-        
+
         {Math.abs(trend) > 0.05 && (
           <div className="spending-predictions__insight spending-predictions__insight--trend">
             {trend > 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
