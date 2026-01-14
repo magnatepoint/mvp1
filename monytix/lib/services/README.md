@@ -4,7 +4,7 @@ This directory contains API service classes for communicating with the Monytix b
 
 ## Setup
 
-1. **Base URL**: Currently set to `http://localhost:8000`. Update in `api_service.dart` if your backend runs on a different port.
+1. **Base URL**: Currently set to `https://api.monytix.ai` (production). The base URL is configured in `api_service.dart` and `config/env.dart`.
 
 2. **Authentication**: The backend uses JWT tokens. Set the token using:
    ```dart

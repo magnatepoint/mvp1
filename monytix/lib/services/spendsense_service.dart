@@ -9,11 +9,11 @@ class SpendSenseService {
 
   Future<Map<String, dynamic>> getKPIs({String? month}) async {
     final query = month != null ? '?month=$month' : '';
-    return await _api.get('/spendsense/kpis$query');
+    return await _api.get('/v1/spendsense/kpis$query');
   }
 
   Future<List<String>> getAvailableMonths() async {
-    final response = await _api.get('/spendsense/kpis/available-months');
+    final response = await _api.get('/v1/spendsense/kpis/available-months');
     return List<String>.from(response['data'] ?? []);
   }
 
@@ -25,7 +25,7 @@ class SpendSenseService {
     if (startDate != null) queryParams.add('start_date=$startDate');
     if (endDate != null) queryParams.add('end_date=$endDate');
     final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
-    return await _api.get('/spendsense/insights$query');
+    return await _api.get('/v1/spendsense/insights$query');
   }
 
   Future<Map<String, dynamic>> getTransactions({
@@ -37,7 +37,7 @@ class SpendSenseService {
     final queryParams = <String>['limit=$limit', 'offset=$offset'];
     if (startDate != null) queryParams.add('start_date=$startDate');
     if (endDate != null) queryParams.add('end_date=$endDate');
-    return await _api.get('/spendsense/transactions?${queryParams.join('&')}');
+    return await _api.get('/v1/spendsense/transactions?${queryParams.join('&')}');
   }
 
   Future<Map<String, dynamic>> uploadFile(
@@ -45,7 +45,7 @@ class SpendSenseService {
     String? password,
     Function(int sent, int total)? onProgress,
   }) async {
-    final uri = Uri.parse('${ApiService.baseUrl}/spendsense/uploads/file');
+    final uri = Uri.parse('${ApiService.baseUrl}/v1/spendsense/uploads/file');
     final request = http.MultipartRequest('POST', uri);
     
     // Add authorization header

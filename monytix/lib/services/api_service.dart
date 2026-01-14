@@ -10,10 +10,8 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  // Use 127.0.0.1 instead of localhost for better compatibility
-  // For Android emulator, use 10.0.2.2
-  // For iOS simulator, use localhost or 127.0.0.1
-  // For macOS desktop, use 127.0.0.1
+  // Production API base URL
+  // Configured to use the production backend at https://api.monytix.ai
   static String get baseUrl {
     return 'https://api.monytix.ai';
   }
@@ -116,9 +114,9 @@ class ApiService {
     if (error is SocketException || error.toString().contains('Connection failed')) {
       return 'Cannot connect to backend server.\n\n'
           'Please ensure:\n'
-          '1. Backend server is running on port 8000\n'
-          '2. For Android emulator, backend should be accessible at 10.0.2.2:8000\n'
-          '3. For iOS/macOS, backend should be accessible at 127.0.0.1:8000\n\n'
+          '1. Backend server is running and accessible\n'
+          '2. You have an active internet connection\n'
+          '3. The backend URL is correctly configured\n\n'
           'Current API URL: $baseUrl';
     }
     return error.toString();

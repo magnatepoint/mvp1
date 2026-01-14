@@ -10,7 +10,7 @@ class ConsoleService {
   Future<Map<String, dynamic>?> getKPIs({String? month}) async {
     try {
       final queryParams = month != null ? '?month=$month' : '';
-      final response = await _api.get('/spendsense/kpis$queryParams');
+      final response = await _api.get('/v1/spendsense/kpis$queryParams');
       debugPrint('KPIs response keys: ${response is Map ? (response as Map).keys.toList() : 'not a map'}');
       if (response is Map<String, dynamic>) {
         return response;
@@ -50,7 +50,7 @@ class ConsoleService {
   /// Get recent transactions
   Future<List<dynamic>> getRecentTransactions({int limit = 5}) async {
     try {
-      final response = await _api.get('/spendsense/transactions?limit=$limit&offset=0');
+      final response = await _api.get('/v1/spendsense/transactions?limit=$limit&offset=0');
       debugPrint('Transactions response keys: ${response is Map ? (response as Map).keys.toList() : 'not a map'}');
       if (response is Map<String, dynamic>) {
         // TransactionListResponse has 'transactions' key
