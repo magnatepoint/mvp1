@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { fetchMoneyMoments, computeMoneyMoments, fetchNudges, evaluateNudges, processNudges, computeSignal } from '../../api/moneymoments'
 import type { MoneyMoment, Nudge } from '../../types/moneymoments'
@@ -20,7 +20,11 @@ export const MoneyMomentsScreen: React.FC<Props> = ({ session }) => {
   const [processingNudges, setProcessingNudges] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    void loadData()
+  }, [session])
+
+  const loadData = async () => {
     setLoading(true)
     setError(null)
     try {
@@ -37,11 +41,7 @@ export const MoneyMomentsScreen: React.FC<Props> = ({ session }) => {
     } finally {
       setLoading(false)
     }
-  }, [session, showToast])
-
-  useEffect(() => {
-    void loadData()
-  }, [loadData])
+  }
 
   const handleCompute = async () => {
     setComputing(true)

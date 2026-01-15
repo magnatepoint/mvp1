@@ -34,9 +34,10 @@ struct ios_monytixApp: App {
         Task { @MainActor in
             do {
                 print("[OAuth] Received callback URL: \(url.absoluteString)")
+                print("[OAuth] URL scheme: \(url.scheme ?? "nil"), host: \(url.host ?? "nil")")
                 
                 // Check if this is a Supabase OAuth callback
-                if url.scheme == "io.supabase.ios_monytix" && url.host == "login-callback" {
+                if url.scheme == "io.supabase.monytix" && url.host == "login-callback" {
                     let authService = AuthService()
                     
                     print("[OAuth] Processing callback with Supabase...")
@@ -48,9 +49,14 @@ struct ios_monytixApp: App {
                     
                     // The auth state listener in AuthManager will automatically pick up the session change
                     // No need to manually update - the listener will handle it
+                } else {
+                    print("[OAuth] URL does not match expected scheme/host. Expected: io.supabase.monytix://login-callback/")
                 }
             } catch {
                 print("[OAuth] Error handling callback: \(error.localizedDescription)")
+                if let authError = error as? AuthError {
+                    print("[OAuth] AuthError: \(authError.localizedDescription)")
+                }
             }
         }
     }

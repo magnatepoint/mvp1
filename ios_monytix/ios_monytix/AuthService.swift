@@ -48,23 +48,34 @@ class AuthService {
     
     // Sign in with email and password
     func signInWithEmail(email: String, password: String) async throws -> Session {
-        return try await supabase.auth.signIn(
-            email: email,
-            password: password
-        )
+        do {
+            return try await supabase.auth.signIn(
+                email: email.trimmingCharacters(in: .whitespaces),
+                password: password
+            )
+        } catch {
+            print("[Auth] Sign-in error: \(error.localizedDescription)")
+            throw error
+        }
     }
     
     // Sign up with email and password
     func signUpWithEmail(email: String, password: String) async throws -> Session {
-        let result = try await supabase.auth.signUp(
-            email: email,
-            password: password
-        )
-        // signUp returns AuthResponse which has an optional session
-        guard let session = result.session else {
-            throw AuthError.signUpFailed
+        do {
+            let result = try await supabase.auth.signUp(
+                email: email.trimmingCharacters(in: .whitespaces),
+                password: password
+            )
+            // signUp returns AuthResponse which has an optional session
+            guard let session = result.session else {
+                print("[Auth] Sign-up succeeded but no session returned (email confirmation may be required)")
+                throw AuthError.signUpFailed
+            }
+            return session
+        } catch {
+            print("[Auth] Sign-up error: \(error.localizedDescription)")
+            throw error
         }
-        return session
     }
     
     // Sign in with Google
@@ -73,19 +84,33 @@ class AuthService {
             throw AuthError.invalidRedirectURL
         }
         
-        try await supabase.auth.signInWithOAuth(
-            provider: .google,
-            redirectTo: redirectURL
-        )
-        
-        return true
+        do {
+            try await supabase.auth.signInWithOAuth(
+                provider: .google,
+                redirectTo: redirectURL,
+                queryParams: [
+                    (name: "prompt", value: "select_account")
+                ]
+            )
+            return true
+        } catch {
+            print("[OAuth] Error initiating Google sign-in: \(error.localizedDescription)")
+            throw error
+        }
     }
     
     // Handle OAuth callback URL
     func handleOAuthCallback(url: URL) async throws -> Session {
-        // The Supabase SDK should automatically handle the callback
-        // But we can also manually process it if needed
-        return try await supabase.auth.session(from: url)
+        do {
+            // The Supabase SDK should automatically handle the callback
+            // But we can also manually process it if needed
+            let session = try await supabase.auth.session(from: url)
+            print("[OAuth] Successfully created session from callback")
+            return session
+        } catch {
+            print("[OAuth] Error processing callback: \(error.localizedDescription)")
+            throw error
+        }
     }
     
     // Sign in with Apple using ID token

@@ -14,6 +14,7 @@ from .models import (
     SpendSenseKPI,
     StagingRecord,
     TransactionRecord,
+    TransactionCreate,
     UploadBatch,
     UploadBatchCreate,
     CategorySpendKPI,
@@ -722,7 +723,12 @@ class SpendSenseService:
             add_clause("v.subcategory_code = ${idx}", subcategory_code)
 
         if channel:
-            add_clause("v.channel = ${idx}", channel)
+            add_clause("LOWER(v.channel) = LOWER(${idx})", channel)
+
+        if kwargs.get("direction"):
+            direction_value = kwargs["direction"]
+            if direction_value in ("debit", "credit"):
+                add_clause("v.direction = ${idx}", direction_value)
 
         where_sql = " AND ".join(where_clauses)
 
@@ -1110,6 +1116,152 @@ class SpendSenseService:
             bank_code=row["bank_code"],
             channel=row["channel"],
             amount=row["amount"],
+            direction=row["direction"],
+        )
+
+    async def create_manual_transaction(
+        self,
+        user_id: str,
+        data: TransactionCreate,
+    ) -> TransactionRecord:
+        """Create a manual transaction."""
+        import uuid
+        from datetime import datetime
+        
+        # Validate direction
+        if data.direction not in ('debit', 'credit'):
+            raise ValueError("direction must be 'debit' or 'credit'")
+        
+        # Validate amount is positive
+        if data.amount <= 0:
+            raise ValueError("amount must be positive")
+        
+        # Create upload batch for manual transaction
+        batch_row = await self._pool.fetchrow(
+            """
+            INSERT INTO spendsense.upload_batch (user_id, source_type, status)
+            VALUES ($1, $2, 'completed')
+            RETURNING upload_id
+            """,
+            user_id,
+            SourceType.MANUAL,
+        )
+        upload_id = batch_row["upload_id"]
+        
+        # Normalize merchant name
+        merchant_normalized = data.merchant_name.strip().lower() if data.merchant_name else None
+        
+        # Insert into txn_fact
+        txn_id = uuid.uuid4()
+        await self._pool.execute(
+            """
+            INSERT INTO spendsense.txn_fact (
+                txn_id, user_id, upload_id, source_type,
+                txn_date, description, amount, direction, currency,
+                merchant_name_norm, account_ref
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            """,
+            txn_id,
+            user_id,
+            upload_id,
+            SourceType.MANUAL,
+            data.txn_date,
+            data.description,
+            data.amount,
+            data.direction,
+            'INR',
+            merchant_normalized,
+            data.account_ref,
+        )
+        
+        # If category/subcategory provided, create override
+        if data.category_code or data.subcategory_code:
+            # Determine txn_type from category if category_code provided
+            txn_type = None
+            if data.category_code:
+                category_row = await self._pool.fetchrow(
+                    "SELECT txn_type FROM spendsense.dim_category WHERE category_code = $1",
+                    data.category_code,
+                )
+                if category_row:
+                    txn_type = category_row["txn_type"]
+            
+            await self._pool.execute(
+                """
+                INSERT INTO spendsense.txn_override (
+                    txn_id, user_id, category_code, subcategory_code, txn_type
+                )
+                VALUES ($1, $2, $3, $4, $5)
+                """,
+                txn_id,
+                user_id,
+                data.category_code,
+                data.subcategory_code,
+                txn_type,
+            )
+        
+        # If channel provided, update txn_fact (channel column may exist in later schema versions)
+        # Note: If channel column doesn't exist, this will fail gracefully
+        if data.channel:
+            try:
+                await self._pool.execute(
+                    """
+                    UPDATE spendsense.txn_fact
+                    SET channel = $1
+                    WHERE txn_id = $2 AND user_id = $3
+                    """,
+                    data.channel.strip().lower(),
+                    txn_id,
+                    user_id,
+                )
+            except Exception as e:
+                # Channel column might not exist in all schema versions
+                logger.warning(f"Could not update channel for manual transaction: {e}")
+        
+        # Return transaction from effective view
+        row = await self._pool.fetchrow(
+            """
+            SELECT
+                v.txn_id,
+                v.txn_date,
+                COALESCE(
+                    v.merchant_name_norm,
+                    CASE 
+                        WHEN v.description IS NOT NULL 
+                             AND LENGTH(TRIM(v.description)) > 0 
+                             AND LENGTH(TRIM(v.description)) <= 50
+                        THEN INITCAP(REGEXP_REPLACE(TRIM(v.description), '\\s+', ' ', 'g'))
+                        ELSE 'Unknown'
+                    END
+                ) AS merchant_name,
+                COALESCE(dc.category_name, v.category_code) AS category_name,
+                COALESCE(ds.subcategory_name, v.subcategory_code) AS subcategory_name,
+                v.bank_code,
+                v.channel,
+                v.amount,
+                v.direction
+            FROM spendsense.vw_txn_effective v
+            LEFT JOIN spendsense.dim_category dc ON dc.category_code = v.category_code
+            LEFT JOIN spendsense.dim_subcategory ds ON ds.subcategory_code = v.subcategory_code
+            WHERE v.txn_id = $1 AND v.user_id = $2
+            """,
+            txn_id,
+            user_id,
+        )
+        
+        if not row:
+            raise ValueError("Failed to retrieve created transaction")
+        
+        return TransactionRecord(
+            txn_id=str(row["txn_id"]),
+            txn_date=row["txn_date"],
+            merchant=row["merchant_name"],
+            category=row["category_name"],
+            subcategory=row["subcategory_name"],
+            bank_code=row["bank_code"],
+            channel=row["channel"],
+            amount=float(row["amount"]),
             direction=row["direction"],
         )
 

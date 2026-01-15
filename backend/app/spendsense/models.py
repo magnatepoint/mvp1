@@ -51,9 +51,24 @@ class TransactionListResponse(BaseModel):
     page_size: int
 
 
+class TransactionCreate(BaseModel):
+    txn_date: date
+    merchant_name: str
+    description: str | None = None
+    amount: float
+    direction: str
+    category_code: str | None = None
+    subcategory_code: str | None = None
+    channel: str | None = None
+    account_ref: str | None = None
+
+
 class TransactionUpdate(BaseModel):
     category_code: str | None = None
     subcategory_code: str | None = None
+    txn_type: str | None = None
+    merchant_name: str | None = None
+    channel: str | None = None
 
 
 class CategoryResponse(BaseModel):

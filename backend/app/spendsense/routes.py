@@ -11,6 +11,7 @@ from .models import (
     SourceType,
     SpendSenseKPI,
     StagingRecord,
+    TransactionCreate,
     TransactionListResponse,
     TransactionRecord,
     TransactionUpdate,
@@ -122,6 +123,24 @@ async def get_batch_status(
     return batch
 
 
+@router.post(
+    "/transactions",
+    response_model=TransactionRecord,
+    summary="Create manual transaction",
+    status_code=201,
+)
+async def create_transaction(
+    data: TransactionCreate,
+    user: AuthenticatedUser = Depends(get_current_user),
+    service: SpendSenseService = Depends(get_service),
+) -> TransactionRecord:
+    """Create a manual transaction."""
+    try:
+        return await service.create_manual_transaction(user.user_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get(
     "/transactions",
     response_model=TransactionListResponse,
@@ -134,6 +153,7 @@ async def list_transactions(
     category_code: str | None = Query(None),
     subcategory_code: str | None = Query(None),
     channel: str | None = Query(None),
+    direction: str | None = Query(None, description="Filter by direction: debit or credit"),
     start_date: str | None = Query(None, description="Start date in YYYY-MM-DD format"),
     end_date: str | None = Query(None, description="End date in YYYY-MM-DD format"),
     user: AuthenticatedUser = Depends(get_current_user),
@@ -149,6 +169,7 @@ async def list_transactions(
         channel=channel,
         start_date=start_date,
         end_date=end_date,
+        direction=direction,
     )
     # Calculate page and page_size from limit and offset
     page = (offset // limit) + 1 if limit > 0 else 1
@@ -188,12 +209,25 @@ async def update_transaction(
 ) -> TransactionRecord:
     """Update transaction category, subcategory, or transaction type via override."""
     try:
+        # Safely get txn_type - handle both old and new model versions
+        # Pydantic may raise AttributeError even if hasattr returns True
+        txn_type = None
+        try:
+            txn_type = update.txn_type
+        except AttributeError:
+            # Field doesn't exist in this model version, try to get from dict
+            try:
+                update_dict = update.model_dump() if hasattr(update, 'model_dump') else update.dict()
+                txn_type = update_dict.get('txn_type')
+            except:
+                pass
+        
         return await service.update_transaction(
             user_id=user.user_id,
             txn_id=txn_id,
             category_code=update.category_code,
             subcategory_code=update.subcategory_code,
-            txn_type=update.txn_type,
+            txn_type=txn_type,
             merchant_name=update.merchant_name,
             channel=update.channel,
         )

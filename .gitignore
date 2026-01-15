@@ -1,23 +1,85 @@
-# General
-.DS_Store
+# Environment files
 .env
-*.log
+.env.local
+.env.production
+.env.production.example
+*.env
 
 # Python
-**/__pycache__/
-**/*.pyc
-backend/.venv/
-backend/.env
-backend/gmail-pubsub-key.json
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
 
-# Node / Next / React
-**/node_modules/
-**/.next/
-**/.turbo/
-**/dist/
-**/build/
-monyweb/.env
+# Node
+node_modules/
+.next/
+out/
+*.log
 
-# Misc
-*.sqlite3
-*.db
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Secrets and keys
+*.pem
+*.key
+*-key.json
+*-pubsub-key.json
+gmail-pubsub-key.json
+*.json.key
+
+# Logs
+*.log
+.pids/
+logs/
+
+# Build artifacts
+*.class
+*.jar
+*.war
+*.ear
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# Android
+*.apk
+*.ap_
+*.aab
+local.properties
+
+# iOS
+*.xcuserstate
+*.xcuserdatad/
+DerivedData/
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
