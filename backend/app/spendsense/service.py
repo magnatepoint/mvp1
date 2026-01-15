@@ -59,6 +59,29 @@ class SpendSenseService:
             month: Optional month filter in YYYY-MM format (e.g., '2025-11'). 
                    If None, returns latest available month.
         """
+        # First, check if user has any transactions at all
+        # This prevents showing stale data from materialized views after deletion
+        transaction_count = await self._pool.fetchval(
+            """
+            SELECT COUNT(*) FROM spendsense.txn_fact WHERE user_id = $1
+            """,
+            user_id,
+        )
+        
+        # If no transactions exist, return zeros immediately
+        if transaction_count == 0:
+            return SpendSenseKPI(
+                month=None,
+                income_amount=0.0,
+                needs_amount=0.0,
+                wants_amount=0.0,
+                assets_amount=0.0,
+                top_categories=[],
+                wants_gauge=self._build_wants_gauge(0.0, 0.0),
+                best_month=None,
+                recent_loot_drop=None,
+            )
+        
         # Parse month filter if provided
         target_month = None
         if month:
