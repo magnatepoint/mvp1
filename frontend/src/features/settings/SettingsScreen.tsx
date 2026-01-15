@@ -47,7 +47,7 @@ export function SettingsScreen({ session }: Props) {
     setDeleteError(null)
     setSuccess(null)
     try {
-      const response = await fetch(`${env.apiBaseUrl}/spendsense/data`, {
+      const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/data`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
