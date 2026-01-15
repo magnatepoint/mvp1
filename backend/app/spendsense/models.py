@@ -59,12 +59,14 @@ class TransactionUpdate(BaseModel):
 class CategoryResponse(BaseModel):
     category_code: str
     category_name: str
+    is_custom: bool = False
 
 
 class SubcategoryResponse(BaseModel):
     subcategory_code: str
     subcategory_name: str
     category_code: str
+    is_custom: bool = False
 
 
 class CategorySpendKPI(BaseModel):

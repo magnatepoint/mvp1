@@ -1172,6 +1172,7 @@ class SpendSenseService:
                 "subcategory_code": row["subcategory_code"],
                 "subcategory_name": row["subcategory_name"],
                 "category_code": row["category_code"],
+                "is_custom": row.get("is_custom", False),
             }
             for row in rows
         ]
