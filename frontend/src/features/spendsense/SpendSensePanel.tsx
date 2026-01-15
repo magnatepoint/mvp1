@@ -210,136 +210,143 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
       }),
     [],
   )
+  // Memoize transaction properties to ensure stable dependencies
+  const transactionCategory = useMemo(() => transaction.category ?? null, [transaction.category])
+  const transactionSubcategory = useMemo(() => transaction.subcategory ?? null, [transaction.subcategory])
+  const transactionMerchant = useMemo(() => transaction.merchant ?? null, [transaction.merchant])
+  const transactionChannel = useMemo(() => transaction.channel ?? null, [transaction.channel])
+
   useEffect(() => {
-    if (editing) {
-      setMerchantName(transaction.merchant ?? '')
-      setSelectedChannel(transaction.channel ?? '')
-      
-      // Fetch categories from Supabase
-      // Note: Tables are in 'spendsense' schema. Supabase PostgREST only exposes 'public' schema by default.
-      // If tables aren't accessible directly, we fallback to backend API.
-      const fetchCategories = async () => {
-        try {
-          // Try Supabase first (if tables are exposed via views in public schema or schema is configured)
-          let categoriesData: any[] | null = null
-          let categoriesError: any = null
-          
-          const result = await supabase
-            .from('dim_category')
-            .select('category_code, category_name, is_custom, display_order')
-            .eq('active', true)
-            .order('is_custom', { ascending: true })
-            .order('display_order', { ascending: true })
-            .order('category_name', { ascending: true })
-          
-          categoriesData = result.data
-          categoriesError = result.error
-          
-          // If Supabase access fails (likely because tables are in 'spendsense' schema, not 'public'),
-          // fallback to backend API which can access the schema directly
-          if (categoriesError || !categoriesData) {
-            console.warn('Supabase direct access failed (tables may be in custom schema), falling back to backend API:', categoriesError?.message)
-            const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/categories`, {
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            })
-            if (!response.ok) {
-              throw new Error(`Failed to fetch categories from backend: ${response.statusText}`)
-            }
-            const backendData: Array<{category_code: string, category_name: string, is_custom?: boolean}> = await response.json()
-            categoriesData = backendData.map((cat) => ({
-              category_code: cat.category_code,
-              category_name: cat.category_name,
-              is_custom: cat.is_custom ?? false,
-            }))
+    if (!editing) return
+
+    setMerchantName(transactionMerchant ?? '')
+    setSelectedChannel(transactionChannel ?? '')
+    
+    // Fetch categories from Supabase
+    // Note: Tables are in 'spendsense' schema. Supabase PostgREST only exposes 'public' schema by default.
+    // If tables aren't accessible directly, we fallback to backend API.
+    const fetchCategories = async () => {
+      try {
+        // Try Supabase first (if tables are exposed via views in public schema or schema is configured)
+        let categoriesData: any[] | null = null
+        let categoriesError: any = null
+        
+        const result = await supabase
+          .from('dim_category')
+          .select('category_code, category_name, is_custom, display_order')
+          .eq('active', true)
+          .order('is_custom', { ascending: true })
+          .order('display_order', { ascending: true })
+          .order('category_name', { ascending: true })
+        
+        categoriesData = result.data
+        categoriesError = result.error
+        
+        // If Supabase access fails (likely because tables are in 'spendsense' schema, not 'public'),
+        // fallback to backend API which can access the schema directly
+        if (categoriesError || !categoriesData) {
+          console.warn('Supabase direct access failed (tables may be in custom schema), falling back to backend API:', categoriesError?.message)
+          const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/categories`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+          if (!response.ok) {
+            throw new Error(`Failed to fetch categories from backend: ${response.statusText}`)
           }
-          
-          const categoriesList: Category[] = (categoriesData || []).map((cat: any) => ({
-            code: cat.category_code || cat.code,
-            name: cat.category_name || cat.name,
+          const backendData: Array<{category_code: string, category_name: string, is_custom?: boolean}> = await response.json()
+          categoriesData = backendData.map((cat) => ({
+            category_code: cat.category_code,
+            category_name: cat.category_name,
             is_custom: cat.is_custom ?? false,
           }))
-          
-          setCategories(categoriesList)
-          
-          // Find current category code
-          const currentCat = categoriesList.find((c) => c.name === transaction.category)
-          if (currentCat) {
-            setSelectedCategory(currentCat.code)
-            // Fetch subcategories for this category
-            await fetchSubcategories(currentCat.code, transaction.subcategory)
-          } else {
-            setSelectedCategory('')
-            setSubcategories([])
-            setSelectedSubcategory('')
-          }
-        } catch (err) {
-          console.error('Error fetching categories:', err)
-          setError(err instanceof Error ? err.message : 'Failed to load categories')
         }
+        
+        const categoriesList: Category[] = (categoriesData || []).map((cat: any) => ({
+          code: cat.category_code || cat.code,
+          name: cat.category_name || cat.name,
+          is_custom: cat.is_custom ?? false,
+        }))
+        
+        setCategories(categoriesList)
+        
+        // Find current category code
+        const currentCat = categoriesList.find((c) => c.name === transactionCategory)
+        if (currentCat) {
+          setSelectedCategory(currentCat.code)
+          // Fetch subcategories for this category
+          await fetchSubcategories(currentCat.code, transactionSubcategory)
+        } else {
+          setSelectedCategory('')
+          setSubcategories([])
+          setSelectedSubcategory('')
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load categories')
       }
-      
-      const fetchSubcategories = async (categoryCode: string, currentSubcategoryName: string | null) => {
-        try {
-          // Try Supabase first (if tables are exposed via views in public schema or schema is configured)
-          let subcategoriesData: any[] | null = null
-          let subcategoriesError: any = null
-          
-          const result = await supabase
-            .from('dim_subcategory')
-            .select('subcategory_code, subcategory_name, is_custom, display_order')
-            .eq('category_code', categoryCode)
-            .eq('active', true)
-            .order('is_custom', { ascending: true })
-            .order('display_order', { ascending: true })
-            .order('subcategory_name', { ascending: true })
-          
-          subcategoriesData = result.data
-          subcategoriesError = result.error
-          
-          // If Supabase access fails (likely because tables are in 'spendsense' schema, not 'public'),
-          // fallback to backend API which can access the schema directly
-          if (subcategoriesError || !subcategoriesData) {
-            console.warn('Supabase direct access failed (tables may be in custom schema), falling back to backend API:', subcategoriesError?.message)
-            const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/subcategories?category_code=${categoryCode}`, {
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            })
-            if (!response.ok) {
-              console.error(`Failed to fetch subcategories from backend: ${response.statusText}`)
-              return
-            }
-            const backendData: Array<{subcategory_code: string, subcategory_name: string, category_code: string, is_custom?: boolean}> = await response.json()
-            subcategoriesData = backendData.map((sub) => ({
-              subcategory_code: sub.subcategory_code,
-              subcategory_name: sub.subcategory_name,
-              is_custom: sub.is_custom ?? false,
-            }))
+    }
+    
+    const fetchSubcategories = async (categoryCode: string, currentSubcategoryName: string | null) => {
+      try {
+        // Try Supabase first (if tables are exposed via views in public schema or schema is configured)
+        let subcategoriesData: any[] | null = null
+        let subcategoriesError: any = null
+        
+        const result = await supabase
+          .from('dim_subcategory')
+          .select('subcategory_code, subcategory_name, is_custom, display_order')
+          .eq('category_code', categoryCode)
+          .eq('active', true)
+          .order('is_custom', { ascending: true })
+          .order('display_order', { ascending: true })
+          .order('subcategory_name', { ascending: true })
+        
+        subcategoriesData = result.data
+        subcategoriesError = result.error
+        
+        // If Supabase access fails (likely because tables are in 'spendsense' schema, not 'public'),
+        // fallback to backend API which can access the schema directly
+        if (subcategoriesError || !subcategoriesData) {
+          console.warn('Supabase direct access failed (tables may be in custom schema), falling back to backend API:', subcategoriesError?.message)
+          const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/subcategories?category_code=${categoryCode}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+          if (!response.ok) {
+            console.error(`Failed to fetch subcategories from backend: ${response.statusText}`)
+            return
           }
-          
-          const subcategoriesList: Subcategory[] = (subcategoriesData || []).map((sub: any) => ({
-            code: sub.subcategory_code || sub.code,
-            name: sub.subcategory_name || sub.name,
+          const backendData: Array<{subcategory_code: string, subcategory_name: string, category_code: string, is_custom?: boolean}> = await response.json()
+          subcategoriesData = backendData.map((sub) => ({
+            subcategory_code: sub.subcategory_code,
+            subcategory_name: sub.subcategory_name,
             is_custom: sub.is_custom ?? false,
           }))
-          
-          setSubcategories(subcategoriesList)
-          
-          if (currentSubcategoryName) {
-            const currentSub = subcategoriesList.find((s) => s.name === currentSubcategoryName)
-            if (currentSub) setSelectedSubcategory(currentSub.code)
-          }
-        } catch (err) {
-          console.error('Error fetching subcategories:', err)
         }
+        
+        const subcategoriesList: Subcategory[] = (subcategoriesData || []).map((sub: any) => ({
+          code: sub.subcategory_code || sub.code,
+          name: sub.subcategory_name || sub.name,
+          is_custom: sub.is_custom ?? false,
+        }))
+        
+        setSubcategories(subcategoriesList)
+        
+        if (currentSubcategoryName) {
+          const currentSub = subcategoriesList.find((s) => s.name === currentSubcategoryName)
+          if (currentSub) setSelectedSubcategory(currentSub.code)
+        }
+      } catch (err) {
+        console.error('Error fetching subcategories:', err)
       }
-      
-      void fetchCategories()
     }
+    
+    void fetchCategories()
   }, [
     editing,
-    transaction.category,
-    transaction.subcategory,
-    transaction.merchant,
-    transaction.channel,
+    session.access_token,
+    transactionCategory,
+    transactionSubcategory,
+    transactionMerchant,
+    transactionChannel,
   ])
 
   const handleSave = async () => {
