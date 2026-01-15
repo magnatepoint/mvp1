@@ -145,21 +145,41 @@
 }
 
 .settings-screen__success {
-  padding: 1.25rem;
+  padding: 1.5rem;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(52, 245, 197, 0.2);
-  background: rgba(52, 245, 197, 0.05);
+  border: 2px solid rgba(52, 245, 197, 0.3);
+  background: rgba(52, 245, 197, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.settings-screen__successHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.settings-screen__successIcon {
+  color: var(--color-teal);
+  flex-shrink: 0;
 }
 
 .settings-screen__successTitle {
   color: var(--color-teal);
-  font-weight: 600;
-  margin: 0 0 0.75rem 0;
+  font-weight: 700;
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.settings-screen__successMessage {
+  color: var(--color-muted);
+  margin: 0 0 1rem 0;
+  font-weight: 500;
 }
 
 .settings-screen__successList {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: 1.5rem;
   color: var(--color-muted);
   line-height: 1.8;
 }

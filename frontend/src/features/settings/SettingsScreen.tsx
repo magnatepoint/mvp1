@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { CheckCircle2 } from 'lucide-react'
 import './SettingsScreen.css'
 import { env } from '../../env'
+import { useToast } from '../../components/Toast'
 
 type Props = {
   session: Session
@@ -26,6 +28,7 @@ type DeleteResponse = {
 const POLLABLE_STATUSES: GmailJobStatus['status'][] = ['queued', 'authorizing', 'syncing']
 
 export function SettingsScreen({ session }: Props) {
+  const { showToast } = useToast()
   const [deleting, setDeleting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -60,8 +63,17 @@ export function SettingsScreen({ session }: Props) {
       const result = (await response.json()) as DeleteResponse
       setSuccess(result)
       setShowConfirm(false)
+      
+      // Show success toast with summary
+      const totalDeleted = result.transactions_deleted + result.batches_deleted + result.staging_deleted + result.overrides_deleted
+      showToast(
+        `Successfully deleted ${totalDeleted} records: ${result.transactions_deleted} transactions, ${result.batches_deleted} batches, ${result.staging_deleted} staging records, ${result.overrides_deleted} overrides`,
+        'success'
+      )
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Unknown error')
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setDeleteError(errorMessage)
+      showToast(errorMessage, 'error')
     } finally {
       setDeleting(false)
     }
@@ -247,7 +259,13 @@ export function SettingsScreen({ session }: Props) {
 
           {success && (
             <div className="settings-screen__success">
-              <p className="settings-screen__successTitle">Data deleted successfully</p>
+              <div className="settings-screen__successHeader">
+                <CheckCircle2 size={24} className="settings-screen__successIcon" />
+                <p className="settings-screen__successTitle">✅ Data deleted successfully!</p>
+              </div>
+              <p className="settings-screen__successMessage">
+                All your transaction data has been permanently deleted. This action cannot be undone.
+              </p>
               <ul className="settings-screen__successList">
                 <li>{success.transactions_deleted} transactions deleted</li>
                 <li>{success.batches_deleted} upload batches deleted</li>
