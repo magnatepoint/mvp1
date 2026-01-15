@@ -70,6 +70,12 @@ export function SettingsScreen({ session }: Props) {
         `Successfully deleted ${totalDeleted} records: ${result.transactions_deleted} transactions, ${result.batches_deleted} batches, ${result.staging_deleted} staging records, ${result.overrides_deleted} overrides`,
         'success'
       )
+      
+      // Reload the page after a short delay to refresh all data across the app
+      // This ensures KPIs, transactions, and all cached data is cleared
+      setTimeout(() => {
+        window.location.reload()
+      }, 2000) // 2 second delay to show the success message
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setDeleteError(errorMessage)
