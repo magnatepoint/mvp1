@@ -704,10 +704,18 @@ export function SpendSensePanel({ session }: Props) {
         signal: controller.signal,
       })
         .then((response) => {
-          if (!response.ok) throw new Error('Unable to load transactions')
+          // Treat 404 as empty data (no transactions yet)
+          if (response.status === 404) {
+            setTransactions([])
+            setTotalCount(0)
+            setError(null)
+            return
+          }
+          if (!response.ok) throw new Error(`Unable to load transactions: ${response.statusText}`)
           return response.json() as Promise<TransactionResponse>
         })
         .then((data) => {
+          if (!data) return // Handled 404 case above
           if (Array.isArray(data)) {
             setTransactions(data)
             setTotalCount(data.length)
@@ -715,6 +723,7 @@ export function SpendSensePanel({ session }: Props) {
             setTransactions(data.transactions || [])
             setTotalCount(data.total || 0)
           }
+          setError(null)
         })
         .catch((err) => {
           if (!(err instanceof DOMException && err.name === 'AbortError')) {
@@ -763,11 +772,43 @@ export function SpendSensePanel({ session }: Props) {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then((res) => {
-        if (!res.ok) throw new Error('Unable to load KPIs')
+        // Treat 404 as empty data (no transactions yet) - return zeros
+        if (res.status === 404) {
+          setKpis({
+            month: null,
+            income_amount: 0,
+            needs_amount: 0,
+            wants_amount: 0,
+            assets_amount: 0,
+            top_categories: [],
+            wants_gauge: null,
+            best_month: null,
+            recent_loot_drop: null,
+          })
+          return
+        }
+        if (!res.ok) throw new Error(`Unable to load KPIs: ${res.statusText}`)
         return res.json() as Promise<DashboardKPI>
       })
-      .then((data) => setKpis(data))
-      .catch((err) => setKpiError(err instanceof Error ? err.message : 'Unknown error'))
+      .then((data) => {
+        if (data) setKpis(data)
+      })
+      .catch((err) => {
+        // On error, set zeros instead of showing error (better UX for empty state)
+        console.warn('KPI fetch error (treating as empty):', err)
+        setKpis({
+          month: null,
+          income_amount: 0,
+          needs_amount: 0,
+          wants_amount: 0,
+          assets_amount: 0,
+          top_categories: [],
+          wants_gauge: null,
+          best_month: null,
+          recent_loot_drop: null,
+        })
+        setKpiError(null) // Don't show error for empty state
+      })
       .finally(() => setKpiLoading(false))
   }, [session.access_token])
 
