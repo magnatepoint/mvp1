@@ -5,7 +5,22 @@ const apiBaseUrl =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'https://api.monytix.ai'
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase environment variables are missing. Check VITE_SUPABASE_* values.')
+  const missing = []
+  if (!supabaseUrl) missing.push('VITE_SUPABASE_URL')
+  if (!supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY')
+  
+  throw new Error(
+    `Missing required environment variables: ${missing.join(', ')}\n\n` +
+    `Please create a .env file in the frontend directory with:\n` +
+    `VITE_SUPABASE_URL=https://your-project.supabase.co\n` +
+    `VITE_SUPABASE_ANON_KEY=your-anon-key\n\n` +
+    `Get these from: https://supabase.com/dashboard → Your Project → Settings → API`
+  )
+}
+
+// Validate Supabase URL format
+if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('.supabase.co')) {
+  console.warn('⚠️  VITE_SUPABASE_URL does not look like a valid Supabase URL:', supabaseUrl)
 }
 
 export const env = {

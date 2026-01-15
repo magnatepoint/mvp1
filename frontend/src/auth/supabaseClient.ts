@@ -1,5 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { env } from '../env'
 
-export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey)
+export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  },
+})
 

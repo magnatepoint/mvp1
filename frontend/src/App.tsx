@@ -34,15 +34,38 @@ function AppContent() {
       return fallback
     }
     const normalized = message.toLowerCase()
+    
+    // Rate limiting errors
+    if (normalized.includes('for security purposes') || normalized.includes('after') && normalized.includes('seconds')) {
+      // Try to extract the wait time from the message
+      const secondsMatch = message.match(/(\d+)\s*seconds?/i)
+      if (secondsMatch) {
+        const seconds = parseInt(secondsMatch[1], 10)
+        return `Too many sign-up attempts. Please wait ${seconds} seconds before trying again.`
+      }
+      return 'Too many sign-up attempts. Please wait a moment before trying again.'
+    }
+    
+    // Invalid credentials
     if (normalized.includes('invalid login credentials')) {
       return 'Invalid email or password.'
     }
+    
+    // Email not confirmed
     if (normalized.includes('email not confirmed')) {
       return 'Check your inbox to confirm your email before signing in.'
     }
+    
+    // Email logins disabled
     if (normalized.includes('email logins are disabled')) {
       return 'Email/password sign-in is disabled for this project.'
     }
+    
+    // User already registered
+    if (normalized.includes('user already registered') || normalized.includes('already registered')) {
+      return 'An account with this email already exists. Please sign in instead.'
+    }
+    
     return message
   }
 

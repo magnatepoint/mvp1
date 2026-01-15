@@ -48,11 +48,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       if (code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-        if (exchangeError) {
-          console.error('Failed to exchange OAuth code for session', exchangeError)
-        } else {
-          // Clear code from URL on success
+        try {
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+          if (exchangeError) {
+            console.error('Failed to exchange OAuth code for session', exchangeError)
+            // Clear any invalid session data
+            await supabase.auth.signOut()
+            setSession(null)
+            // Clear code from URL even on error
+            window.history.replaceState({}, document.title, window.location.pathname)
+          } else {
+            // Session successfully set, update state immediately
+            if (data.session) {
+              setSession(data.session)
+            }
+            // Clear code from URL on success
+            window.history.replaceState({}, document.title, window.location.pathname)
+          }
+        } catch (err) {
+          console.error('Unexpected error during OAuth callback:', err)
+          await supabase.auth.signOut()
+          setSession(null)
           window.history.replaceState({}, document.title, window.location.pathname)
         }
         return
@@ -82,14 +98,49 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void handleOAuthCallback()
 
     const loadSession = async () => {
-      const { data } = await supabase.auth.getSession()
-      setSession(data.session)
-      setLoading(false)
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        
+        // If there's an error with refresh token, clear the session
+        if (error) {
+          // Check if it's a refresh token error
+          if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
+            console.warn('Invalid refresh token, clearing session:', error.message)
+            // Clear the invalid session
+            await supabase.auth.signOut()
+            setSession(null)
+          } else {
+            console.error('Error loading session:', error)
+            setSession(null)
+          }
+        } else {
+          setSession(data.session)
+        }
+      } catch (err) {
+        console.error('Unexpected error loading session:', err)
+        setSession(null)
+      } finally {
+        setLoading(false)
+      }
     }
 
     void loadSession()
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Handle token refresh errors
+      if (event === 'TOKEN_REFRESHED' && !newSession) {
+        // Token refresh failed, clear session
+        console.warn('Token refresh failed, clearing session')
+        setSession(null)
+        return
+      }
+      
+      // Handle signed out events
+      if (event === 'SIGNED_OUT') {
+        setSession(null)
+        return
+      }
+      
       setSession(newSession)
     })
 
@@ -99,28 +150,94 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return error
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        console.error('Sign-in error:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+        })
+        return error
+      }
+      // Update session immediately on successful sign-in
+      if (data.session) {
+        setSession(data.session)
+      }
+      return null
+    } catch (err) {
+      console.error('Unexpected sign-in error:', err)
+      return {
+        message: 'An unexpected error occurred during sign-in',
+        name: 'AuthError',
+        status: 500,
+      } as AuthError
+    }
   }, [])
 
   const signUp = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password })
-    return error
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        console.error('Sign-up error:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+        })
+        return error
+      }
+      // Update session immediately on successful sign-up (if email confirmation is disabled)
+      if (data.session) {
+        setSession(data.session)
+      }
+      return null
+    } catch (err) {
+      console.error('Unexpected sign-up error:', err)
+      return {
+        message: 'An unexpected error occurred during registration',
+        name: 'AuthError',
+        status: 500,
+      } as AuthError
+    }
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
-    // Use root path since callback handler runs on all pages
-    const redirectTo = env.supabaseRedirectUrl ?? `${window.location.origin}/`
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-        queryParams: {
-          prompt: 'select_account',
+    try {
+      // Use root path since callback handler runs on all pages
+      const redirectTo = env.supabaseRedirectUrl ?? `${window.location.origin}/`
+      
+      console.log('Initiating Google OAuth with redirect URL:', redirectTo)
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          queryParams: {
+            prompt: 'select_account',
+          },
         },
-      },
-    })
-    return error
+      })
+      
+      if (error) {
+        console.error('Google OAuth initiation error:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+        })
+        return error
+      }
+      
+      // OAuth redirect will happen automatically
+      // The callback handler will process the result
+      return null
+    } catch (err) {
+      console.error('Unexpected Google OAuth error:', err)
+      return {
+        message: 'An unexpected error occurred during Google sign-in',
+        name: 'AuthError',
+        status: 500,
+      } as AuthError
+    }
   }, [])
 
   const signOut = useCallback(async () => {
