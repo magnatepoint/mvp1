@@ -51,17 +51,40 @@ async def upload_statement(
     user: AuthenticatedUser = Depends(get_current_user),
     service: SpendSenseService = Depends(get_service),
 ) -> UploadBatch:
-    contents = await file.read()
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Upload request received: filename={file.filename}, user_id={user.user_id}, size={file.size if hasattr(file, 'size') else 'unknown'}")
+    
     try:
-        return await service.enqueue_file_ingest(
+        contents = await file.read()
+        file_size = len(contents)
+        logger.info(f"File read successfully: {file_size} bytes")
+        
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        
+        if file_size > 50 * 1024 * 1024:  # 50MB limit
+            raise HTTPException(status_code=413, detail="File size exceeds 50MB limit")
+        
+        result = await service.enqueue_file_ingest(
             user_id=user.user_id,
-            filename=file.filename,
+            filename=file.filename or "unknown",
             file_bytes=contents,
             source_type=SourceType.FILE,
             pdf_password=password,
         )
+        
+        logger.info(f"Upload batch created successfully: upload_id={result.upload_id}, batch_id={result.upload_id}")
+        return result
+    except HTTPException:
+        raise
     except SpendSenseParseError as exc:
+        logger.error(f"Parse error during upload: {exc}")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(f"Unexpected error during upload: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(exc)}") from exc
 
 
 @router.post("/staging", response_model=StagingRecord, summary="Stage raw transaction")
@@ -208,19 +231,29 @@ async def update_transaction(
     service: SpendSenseService = Depends(get_service),
 ) -> TransactionRecord:
     """Update transaction category, subcategory, or transaction type via override."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
-        # Safely get txn_type - handle both old and new model versions
-        # Pydantic may raise AttributeError even if hasattr returns True
+        # Safely get txn_type - Pydantic v2 may raise AttributeError when accessing optional fields
+        # Use model_dump() to safely get all fields as a dict, then access txn_type
         txn_type = None
         try:
-            txn_type = update.txn_type
-        except AttributeError:
-            # Field doesn't exist in this model version, try to get from dict
+            # Get dict representation of the model
+            update_dict = update.model_dump() if hasattr(update, 'model_dump') else update.dict()
+            txn_type = update_dict.get('txn_type')
+        except (AttributeError, TypeError, ValueError):
+            # If model_dump fails, try getattr as fallback
             try:
-                update_dict = update.model_dump() if hasattr(update, 'model_dump') else update.dict()
-                txn_type = update_dict.get('txn_type')
+                txn_type = getattr(update, 'txn_type', None)
             except:
-                pass
+                txn_type = None
+        
+        logger.info(
+            f"Route: update_transaction called - txn_id={txn_id}, user_id={user.user_id}, "
+            f"category_code={update.category_code}, subcategory_code={update.subcategory_code}, "
+            f"txn_type={txn_type}, merchant_name={update.merchant_name}, channel={update.channel}"
+        )
         
         return await service.update_transaction(
             user_id=user.user_id,
@@ -232,7 +265,17 @@ async def update_transaction(
             channel=update.channel,
         )
     except ValueError as exc:
+        logger.warning(f"Transaction update failed (ValueError): {exc}")
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(
+            f"Transaction update failed with unexpected error: {exc}",
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update transaction: {str(exc)}"
+        ) from exc
 
 
 @router.delete(

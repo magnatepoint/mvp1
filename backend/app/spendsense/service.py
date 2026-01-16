@@ -94,120 +94,13 @@ class SpendSenseService:
                 # Invalid format, ignore and use latest
                 pass
         
+        # Always use fallback calculation to ensure transaction overrides are respected
+        # Materialized views don't include overrides, so we calculate directly from source tables
+        # This ensures KPIs reflect user edits immediately without needing to refresh MVs
         try:
-            if target_month:
-                # Query specific month
-                row = await self._pool.fetchrow(
-                    """
-                    SELECT month,
-                           income_amt,
-                           needs_amt,
-                           wants_amt,
-                           assets_amt
-                    FROM spendsense.mv_spendsense_dashboard_user_month
-                    WHERE user_id = $1
-                      AND month = $2
-                    """,
-                    user_id,
-                    target_month,
-                )
-            else:
-                # Query latest month
-                row = await self._pool.fetchrow(
-                    """
-                    SELECT month,
-                           income_amt,
-                           needs_amt,
-                           wants_amt,
-                           assets_amt
-                    FROM spendsense.mv_spendsense_dashboard_user_month
-                    WHERE user_id = $1
-                    ORDER BY month DESC
-                    LIMIT 1
-                    """,
-                    user_id,
-                )
-
-            if not row:
-                return await self._compute_kpis_fallback(user_id, target_month)
-
-            month = row["month"]
-            # Try to get categories from materialized view, fallback to direct query if it doesn't exist
-            try:
-                categories = await self._pool.fetch(
-                    """
-                    SELECT mc.category_code,
-                           COALESCE(dc.category_name, mc.category_code) AS category_name,
-                           mc.txn_count,
-                           mc.spend_amount,
-                           mc.income_amount
-                    FROM spendsense.mv_spendsense_dashboard_user_month_category mc
-                    LEFT JOIN spendsense.dim_category dc
-                        ON dc.category_code = mc.category_code
-                    WHERE mc.user_id = $1
-                      AND mc.month = $2
-                    ORDER BY mc.spend_amount DESC
-                    LIMIT 5
-                    """,
-                    user_id,
-                    month,
-                )
-            except asyncpg.PostgresError as exc:
-                # Materialized view doesn't exist, compute categories directly
-                logger.debug("Materialized view mv_spendsense_dashboard_user_month_category not found, using direct query: %s", exc)
-                categories = await self._pool.fetch(
-                    """
-                    SELECT 
-                        COALESCE(e.category_id, 'uncategorized') AS category_code,
-                        COALESCE(dc.category_name, 'Uncategorized') AS category_name,
-                        COUNT(*) AS txn_count,
-                        SUM(CASE WHEN f.direction = 'debit' THEN f.amount ELSE 0 END) AS spend_amount,
-                        SUM(CASE WHEN f.direction = 'credit' THEN f.amount ELSE 0 END) AS income_amount
-                    FROM spendsense.txn_fact f
-                    LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
-                    LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
-                    LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
-                    WHERE f.user_id = $1
-                      AND DATE_TRUNC('month', f.txn_date)::date = $2
-                    GROUP BY e.category_id, dc.category_name
-                    ORDER BY spend_amount DESC
-                    LIMIT 5
-                    """,
-                    user_id,
-                    month,
-                )
-            prev_month_map = await self._fetch_prev_month_category_spend(user_id, month)
-            top_categories = self._build_category_badges(categories, prev_month_map)
-
-            wants_gauge = self._build_wants_gauge(
-                needs=float(row["needs_amt"] or 0),
-                wants=float(row["wants_amt"] or 0),
-            )
-
-            best_month = await self._fetch_best_month_from_mv(
-                user_id=user_id,
-                current_month=month,
-                current_net=float(row["income_amt"] or 0) - float(row["wants_amt"] or 0),
-            )
-
-            loot_drop = await self._fetch_recent_loot_drop(user_id)
-
-            return SpendSenseKPI(
-                month=month,
-                income_amount=float(row["income_amt"] or 0),
-                needs_amount=float(row["needs_amt"] or 0),
-                wants_amount=float(row["wants_amt"] or 0),
-                assets_amount=float(row["assets_amt"] or 0),
-                top_categories=top_categories,
-                wants_gauge=wants_gauge,
-                best_month=best_month,
-                recent_loot_drop=loot_drop,
-            )
-        except asyncpg.PostgresError as exc:
-            logger.warning("KPI materialized view missing, using fallback: %s", exc)
             return await self._compute_kpis_fallback(user_id, target_month)
         except Exception as exc:
-            logger.error("Failed to load KPIs: %s", exc)
+            logger.error("Failed to compute KPIs: %s", exc, exc_info=True)
             return SpendSenseKPI(
                 month=None,
                 income_amount=0.0,
@@ -266,14 +159,38 @@ class SpendSenseService:
                     f.txn_date,
                     f.amount,
                     f.direction,
-                    COALESCE(e.category_id, 'uncategorized') AS category_code,
-                    COALESCE(dc.txn_type, 'needs') AS txn_type
+                    -- Use override if exists, otherwise use enriched category
+                    COALESCE(
+                        ov.category_code,
+                        e.category_id,
+                        'uncategorized'
+                    ) AS category_code,
+                    -- Use override txn_type if exists, otherwise derive from category
+                    COALESCE(
+                        ov.txn_type,
+                        dc.txn_type,
+                        CASE 
+                            WHEN f.direction = 'credit' THEN 'income'
+                            ELSE 'needs'
+                        END
+                    ) AS txn_type
                 FROM spendsense.txn_fact f
                 LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
                 LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
-                LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
+                LEFT JOIN spendsense.dim_category dc ON dc.category_code = COALESCE(
+                    (SELECT category_code FROM spendsense.txn_override WHERE txn_id = f.txn_id ORDER BY created_at DESC LIMIT 1),
+                    e.category_id
+                )
+                LEFT JOIN LATERAL (
+                    SELECT category_code, txn_type
+                    FROM spendsense.txn_override
+                    WHERE txn_id = f.txn_id
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) ov ON TRUE
                 WHERE f.user_id = $1
-                  AND DATE_TRUNC('month', f.txn_date)::date = $2
+                  AND f.txn_date >= $2
+                  AND f.txn_date < ($2 + INTERVAL '1 month')::date
             )
             SELECT
                 $2::date AS month,
@@ -292,18 +209,40 @@ class SpendSenseService:
         categories = await self._pool.fetch(
             """
             SELECT
-                COALESCE(e.category_id, 'uncategorized') AS category_code,
-                COALESCE(dc.category_name, e.category_id, 'Uncategorized') AS category_name,
+                -- Use override if exists, otherwise use enriched category
+                COALESCE(
+                    ov.category_code,
+                    e.category_id,
+                    'uncategorized'
+                ) AS category_code,
+                COALESCE(
+                    dc_override.category_name,
+                    dc.category_name,
+                    ov.category_code,
+                    e.category_id,
+                    'Uncategorized'
+                ) AS category_name,
                 COUNT(*) AS txn_count,
                 SUM(CASE WHEN f.direction = 'debit' THEN f.amount ELSE 0 END) AS spend_amount,
                 SUM(CASE WHEN f.direction = 'credit' THEN f.amount ELSE 0 END) AS income_amount
             FROM spendsense.txn_fact f
             LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
             LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+            LEFT JOIN LATERAL (
+                SELECT category_code, subcategory_code, txn_type
+                FROM spendsense.txn_override
+                WHERE txn_id = f.txn_id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) ov ON TRUE
             LEFT JOIN spendsense.dim_category dc ON dc.category_code = e.category_id
+            LEFT JOIN spendsense.dim_category dc_override ON dc_override.category_code = ov.category_code
             WHERE f.user_id = $1
-              AND DATE_TRUNC('month', f.txn_date)::date = $2
-            GROUP BY 1, 2
+              AND f.txn_date >= $2
+              AND f.txn_date < ($2 + INTERVAL '1 month')::date
+            GROUP BY 
+                COALESCE(ov.category_code, e.category_id, 'uncategorized'),
+                COALESCE(dc_override.category_name, dc.category_name, ov.category_code, e.category_id, 'Uncategorized')
             ORDER BY spend_amount DESC NULLS LAST
             LIMIT 5
             """,
@@ -318,14 +257,27 @@ class SpendSenseService:
         prev_categories_rows = await self._pool.fetch(
             """
             SELECT
-                COALESCE(e.category_id, 'uncategorized') AS category_code,
+                -- Use override if exists, otherwise use enriched category
+                COALESCE(
+                    ov.category_code,
+                    e.category_id,
+                    'uncategorized'
+                ) AS category_code,
                 SUM(CASE WHEN f.direction = 'debit' THEN f.amount ELSE 0 END) AS spend_amount
             FROM spendsense.txn_fact f
             LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
             LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+            LEFT JOIN LATERAL (
+                SELECT category_code
+                FROM spendsense.txn_override
+                WHERE txn_id = f.txn_id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) ov ON TRUE
             WHERE f.user_id = $1
-              AND DATE_TRUNC('month', f.txn_date)::date = $2
-            GROUP BY 1
+              AND f.txn_date >= $2
+              AND f.txn_date < ($2 + INTERVAL '1 month')::date
+            GROUP BY COALESCE(ov.category_code, e.category_id, 'uncategorized')
             """,
             user_id,
             prev_month,
@@ -361,15 +313,38 @@ class SpendSenseService:
     async def _fetch_prev_month_category_spend(self, user_id: str, current_month: date | None) -> dict[str, float]:
         if not current_month:
             return {}
+        # Calculate previous month
+        prev_month = current_month - timedelta(days=32)
+        prev_month = prev_month.replace(day=1)
+        
+        # Query with overrides support
         rows = await self._pool.fetch(
             """
-            SELECT category_code, spend_amount
-            FROM spendsense.mv_spendsense_dashboard_user_month_category
-            WHERE user_id = $1
-              AND month = ($2::date - INTERVAL '1 month')::date
+            SELECT
+                -- Use override if exists, otherwise use enriched category
+                COALESCE(
+                    ov.category_code,
+                    e.category_id,
+                    'uncategorized'
+                ) AS category_code,
+                SUM(CASE WHEN f.direction = 'debit' THEN f.amount ELSE 0 END) AS spend_amount
+            FROM spendsense.txn_fact f
+            LEFT JOIN spendsense.txn_parsed tp ON tp.fact_txn_id = f.txn_id
+            LEFT JOIN spendsense.txn_enriched e ON e.parsed_id = tp.parsed_id
+            LEFT JOIN LATERAL (
+                SELECT category_code
+                FROM spendsense.txn_override
+                WHERE txn_id = f.txn_id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) ov ON TRUE
+            WHERE f.user_id = $1
+              AND f.txn_date >= $2
+              AND f.txn_date < ($2 + INTERVAL '1 month')::date
+            GROUP BY COALESCE(ov.category_code, e.category_id, 'uncategorized')
             """,
             user_id,
-            current_month,
+            prev_month,
         )
         return {row["category_code"]: float(row["spend_amount"] or 0) for row in rows}
 
@@ -625,6 +600,9 @@ class SpendSenseService:
         if not filename:
             raise SpendSenseParseError("Filename is required")
 
+        file_size = len(file_bytes)
+        logger.info(f"Enqueueing file ingest: user_id={user_id}, filename={filename}, size={file_size} bytes, has_password={bool(pdf_password)}")
+
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
@@ -637,16 +615,35 @@ class SpendSenseService:
                 filename,
             )
 
-        ingest_statement_file_task.delay(
-            batch_id=str(row["upload_id"]),
-            user_id=user_id,
-            filename=filename,
-            file_b64=base64.b64encode(file_bytes).decode("ascii"),
-            pdf_password=pdf_password,
-        )
+        batch_id = str(row["upload_id"])
+        logger.info(f"Upload batch created: batch_id={batch_id}, enqueueing Celery task...")
+
+        try:
+            # Encode file to base64 for Celery task
+            file_b64 = base64.b64encode(file_bytes).decode("ascii")
+            logger.info(f"File encoded to base64: {len(file_b64)} characters")
+            
+            # Enqueue Celery task
+            task_result = ingest_statement_file_task.delay(
+                batch_id=batch_id,
+                user_id=user_id,
+                filename=filename,
+                file_b64=file_b64,
+                pdf_password=pdf_password,
+            )
+            logger.info(f"Celery task enqueued successfully: task_id={task_result.id}, batch_id={batch_id}")
+        except Exception as exc:
+            logger.error(f"Failed to enqueue Celery task for batch {batch_id}: {exc}", exc_info=True)
+            # Update batch status to failed
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE spendsense.upload_batch SET status = 'failed' WHERE upload_id = $1",
+                    batch_id,
+                )
+            raise SpendSenseParseError(f"Failed to enqueue file processing: {str(exc)}") from exc
 
         return UploadBatch(
-            upload_id=str(row["upload_id"]),
+            upload_id=batch_id,
             user_id=str(row["user_id"]),
             source_type=str(row["source_type"]),
             status=str(row["status"]),
@@ -887,6 +884,12 @@ class SpendSenseService:
         channel: str | None = None,
     ) -> TransactionRecord:
         """Update transaction category/subcategory via override."""
+        logger.info(
+            f"update_transaction called: txn_id={txn_id}, user_id={user_id}, "
+            f"category_code={category_code}, subcategory_code={subcategory_code}, "
+            f"txn_type={txn_type}, merchant_name={merchant_name}, channel={channel}"
+        )
+        
         # Get original transaction and enriched data for feedback
         original_query = """
         SELECT 
@@ -904,7 +907,13 @@ class SpendSenseService:
         """
         original = await self._pool.fetchrow(original_query, txn_id, user_id)
         if not original:
+            logger.warning(f"Transaction not found: txn_id={txn_id}, user_id={user_id}")
             raise ValueError("Transaction not found or access denied")
+        
+        logger.info(
+            f"Original transaction: category={original.get('original_category')}, "
+            f"subcategory={original.get('original_subcategory')}"
+        )
         
         sanitized_merchant = None
         if merchant_name is not None:
@@ -1007,21 +1016,31 @@ class SpendSenseService:
         """
         await self._pool.execute(delete_query, txn_id, user_id)
         
-        # Insert new override
-        override_query = """
-        INSERT INTO spendsense.txn_override (
-            txn_id, user_id, category_code, subcategory_code, txn_type
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        """
-        await self._pool.execute(
-            override_query,
-            txn_id,
-            user_id,
-            category_code,
-            subcategory_code,
-            txn_type,
-        )
+        # Only insert override if at least one of category_code, subcategory_code, or txn_type is provided
+        # If all are None, there's nothing to override
+        if category_code is not None or subcategory_code is not None or txn_type is not None:
+            override_query = """
+            INSERT INTO spendsense.txn_override (
+                txn_id, user_id, category_code, subcategory_code, txn_type
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            """
+            await self._pool.execute(
+                override_query,
+                txn_id,
+                user_id,
+                category_code,
+                subcategory_code,
+                txn_type,
+            )
+            logger.info(
+                f"Created transaction override: txn_id={txn_id}, user_id={user_id}, "
+                f"category={category_code}, subcategory={subcategory_code}, txn_type={txn_type}"
+            )
+        else:
+            logger.debug(
+                f"No override created for txn_id={txn_id}: all category fields are None"
+            )
 
         update_params = [txn_id, user_id]
         update_clauses: list[str] = []

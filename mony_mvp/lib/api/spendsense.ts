@@ -93,12 +93,42 @@ export async function updateTransaction(
   txnId: string,
   updates: TransactionUpdate
 ): Promise<Transaction> {
+  // Clean up the updates object - only include fields that are explicitly set (not undefined)
+  // Omit txn_type if it's not provided, as it's not used in the frontend
+  const cleanedUpdates: Partial<TransactionUpdate> = {}
+  
+  if (updates.category_code !== undefined) {
+    cleanedUpdates.category_code = updates.category_code ?? null
+  }
+  if (updates.subcategory_code !== undefined) {
+    cleanedUpdates.subcategory_code = updates.subcategory_code ?? null
+  }
+  if (updates.merchant_name !== undefined) {
+    cleanedUpdates.merchant_name = updates.merchant_name ?? null
+  }
+  if (updates.channel !== undefined) {
+    cleanedUpdates.channel = updates.channel ?? null
+  }
+  // Only include txn_type if it's explicitly provided (frontend doesn't use this field)
+  if (updates.txn_type !== undefined) {
+    cleanedUpdates.txn_type = updates.txn_type ?? null
+  }
+  
+  // Debug logging in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Transaction Update] Sending update:', {
+      txnId,
+      cleanedUpdates,
+      originalUpdates: updates,
+    })
+  }
+  
   return fetchWithAuth<Transaction>(session, `/v1/spendsense/transactions/${txnId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(updates),
+    body: JSON.stringify(cleanedUpdates),
   })
 }
 
