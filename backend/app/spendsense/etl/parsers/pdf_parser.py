@@ -55,10 +55,13 @@ TABLE_SETTING_PRESETS: list[dict[str, Any] | None] = [
 
 def _extract_pdf_tables(buffer: io.BytesIO, password: str | None = None) -> pd.DataFrame:
     rows: list[list[str]] = []
+    total_pages = 0
+    pages_with_tables = 0
 
     try:
         with pdfplumber.open(buffer, password=password) as pdf:
-            for page in pdf.pages:
+            total_pages = len(pdf.pages)
+            for page_num, page in enumerate(pdf.pages, 1):
                 tables: list[list[list[str | None]]] = []
                 for settings in TABLE_SETTING_PRESETS:
                     if settings is None:
@@ -66,6 +69,7 @@ def _extract_pdf_tables(buffer: io.BytesIO, password: str | None = None) -> pd.D
                     else:
                         tables = page.extract_tables(table_settings=settings) or []
                     if tables:
+                        pages_with_tables += 1
                         break
 
                 for table in tables:
@@ -94,7 +98,13 @@ def _extract_pdf_tables(buffer: io.BytesIO, password: str | None = None) -> pd.D
         raise SpendSenseParseError(f"Unable to read PDF file: {exc}")
 
     if not rows:
-        raise SpendSenseParseError("No tabular data found in PDF file")
+        error_msg = (
+            f"No tabular data found in PDF file. "
+            f"Processed {total_pages} page(s), found tables on {pages_with_tables} page(s). "
+            f"The PDF may be scanned (image-based) or use a non-standard format. "
+            f"Please ensure the PDF contains extractable text and tables."
+        )
+        raise SpendSenseParseError(error_msg)
 
     max_cols = max(len(row) for row in rows)
     normalized_rows = [row + [""] * (max_cols - len(row)) for row in rows]
@@ -111,16 +121,23 @@ def _extract_lines_with_pymupdf(buffer: io.BytesIO) -> list[str] | None:
         return None
 
     lines: list[str] = []
+    total_text_length = 0
     try:
         for page in doc:
             text = page.get_text("text") or ""
+            total_text_length += len(text)
             for line in text.splitlines():
                 stripped = line.strip()
                 if stripped:
                     lines.append(stripped)
     finally:
         doc.close()
-    return lines
+    
+    # If we extracted very little text, the PDF might be scanned/image-based
+    if total_text_length < 100 and len(lines) < 10:
+        return None
+    
+    return lines if lines else None
 
 
 def _maybe_parse_kotak_pdf(lines: list[str]) -> pd.DataFrame | None:
@@ -514,27 +531,49 @@ def _maybe_parse_axis_pdf(lines: list[str]) -> pd.DataFrame | None:
 
 
 def parse_pdf_file(data: bytes, filename: str, password: str | None = None) -> list[dict[str, Any]]:
+    import logging
+    logger = logging.getLogger(__name__)
+    
     buffer = io.BytesIO(data)
     bank_code = infer_bank_code(filename)
     try:
         df_raw = _extract_pdf_tables(buffer, password)
         df = structure_dataframe(df_raw, is_pdf=True)
     except SpendSenseParseError as primary_error:
+        logger.info(f"Table extraction failed for {filename}, attempting fallback parsing with PyMuPDF")
         lines = _extract_lines_with_pymupdf(buffer)
         if lines:
+            logger.info(f"Extracted {len(lines)} lines from PDF using PyMuPDF, trying bank-specific parsers")
             # Try bank-specific parsers in order
             bank_parsers = [
-                _maybe_parse_kotak_pdf,
-                _maybe_parse_hdfc_pdf,
-                _maybe_parse_icici_pdf,
-                _maybe_parse_federal_pdf,
-                _maybe_parse_axis_pdf,
+                ("Kotak", _maybe_parse_kotak_pdf),
+                ("HDFC", _maybe_parse_hdfc_pdf),
+                ("ICICI", _maybe_parse_icici_pdf),
+                ("Federal", _maybe_parse_federal_pdf),
+                ("Axis", _maybe_parse_axis_pdf),
             ]
             
-            for parser in bank_parsers:
-                df = parser(lines)
-                if df is not None:
-                    return dataframe_to_records(df, bank_code=bank_code)
+            for bank_name, parser in bank_parsers:
+                try:
+                    df = parser(lines)
+                    if df is not None:
+                        logger.info(f"Successfully parsed {filename} using {bank_name} parser")
+                        return dataframe_to_records(df, bank_code=bank_code)
+                except Exception as e:
+                    logger.debug(f"{bank_name} parser failed: {e}")
+                    continue
+            
+            logger.warning(
+                f"All parsing methods failed for {filename}. "
+                f"Extracted {len(lines)} lines but no bank-specific parser matched. "
+                f"Original error: {primary_error}"
+            )
+        else:
+            logger.warning(
+                f"PyMuPDF fallback also failed for {filename}. "
+                f"PDF may be corrupted, password-protected, or image-based (scanned). "
+                f"Original error: {primary_error}"
+            )
         raise primary_error
     return dataframe_to_records(df, bank_code=bank_code)
 

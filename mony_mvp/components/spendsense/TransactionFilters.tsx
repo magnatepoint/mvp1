@@ -43,8 +43,11 @@ export default function TransactionFilters({
       loadSubcategories(filters.category_code)
     } else {
       setSubcategories([])
-      onFiltersChange({ ...filters, subcategory_code: null })
+      if (filters.subcategory_code) {
+        onFiltersChange({ ...filters, subcategory_code: null })
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.category_code])
 
   const loadCategories = async () => {
@@ -440,17 +443,27 @@ function FilterChip({
     >
       <span>{label}</span>
       {isActive && (
-        <button
+        <span
           onClick={(e) => {
             e.stopPropagation()
             onClear()
           }}
-          className="ml-1 hover:bg-white/10 rounded-full p-0.5"
+          className="ml-1 hover:bg-white/10 rounded-full p-0.5 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              e.stopPropagation()
+              onClear()
+            }
+          }}
+          aria-label="Clear filter"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
+        </span>
       )}
     </button>
   )
