@@ -9,9 +9,18 @@ interface IncomeVsExpensesChartProps {
 }
 
 export default function IncomeVsExpensesChart({ data }: IncomeVsExpensesChartProps) {
-  const formatCurrency = (value: number | string | undefined) => {
+  const formatCurrency = (value: number | string | readonly (string | number)[] | undefined) => {
     if (value === undefined || value === null) return '₹0'
-    const numValue = typeof value === 'string' ? parseFloat(value) : value
+    
+    // Handle arrays - take the first value or sum them
+    let numValue: number
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '₹0'
+      numValue = typeof value[0] === 'string' ? parseFloat(value[0]) : value[0]
+    } else {
+      numValue = typeof value === 'string' ? parseFloat(value) : value
+    }
+    
     if (isNaN(numValue)) return '₹0'
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
