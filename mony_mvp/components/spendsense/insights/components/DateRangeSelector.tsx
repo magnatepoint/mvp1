@@ -19,6 +19,12 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
   const [showCustom, setShowCustom] = useState(value.preset === 'custom')
 
   const applyPreset = (preset: DateRangePreset) => {
+    // Handle custom preset separately
+    if (preset === 'custom') {
+      setShowCustom(true)
+      return
+    }
+
     const today = new Date()
     let startDate: Date
 
@@ -48,7 +54,7 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
       endDate: today.toISOString().split('T')[0],
       preset,
     })
-    setShowCustom(preset === 'custom')
+    setShowCustom(false)
   }
 
   const handleCustomDates = () => {
