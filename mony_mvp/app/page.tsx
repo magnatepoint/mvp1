@@ -47,24 +47,19 @@ export default function Home() {
     try {
       // Validate API URL - should not contain paths and should point to API domain
       const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
-      const API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths
+      let API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths
       
-      // Warn if incorrectly configured
+      // Check if hostname is wrong (points to frontend instead of API)
       const urlObj = new URL(API_BASE_URL)
       const isWrongHostname = urlObj.hostname === 'mvp.monytix.ai' || urlObj.hostname.includes('mvp.monytix.ai')
-      const hasPath = rawApiUrl !== API_BASE_URL
       
-      if (hasPath || isWrongHostname) {
-        console.error('[Debug] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL is incorrectly configured!')
+      // If hostname is wrong, use the correct default API URL
+      if (isWrongHostname) {
+        console.error('[Debug] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL points to frontend domain!')
         console.error('[Debug] Current value:', rawApiUrl)
-        if (hasPath) {
-          console.error('[Debug] ❌ Contains a path (should be base URL only)')
-        }
-        if (isWrongHostname) {
-          console.error('[Debug] ❌ Points to frontend domain instead of API domain')
-        }
-        console.error('[Debug] ✅ Should be: https://api.monytix.ai')
+        console.error('[Debug] Using fallback: https://api.monytix.ai')
         console.error('[Debug] Fix in Cloudflare Pages → Settings → Environment Variables')
+        API_BASE_URL = 'https://api.monytix.ai'
       }
       
       console.log('[Debug] API URL:', API_BASE_URL)

@@ -2,25 +2,26 @@ import type { Session } from '@supabase/supabase-js'
 
 // Validate API URL - should not contain paths like /auth/callback
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
-const API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths, keep only protocol://host
+let API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths, keep only protocol://host
 
-// Warn if API URL was incorrectly set with a path or wrong hostname
+// Check if API URL is incorrectly configured
 const urlObj = new URL(API_BASE_URL)
 const isWrongHostname = urlObj.hostname === 'mvp.monytix.ai' || urlObj.hostname.includes('mvp.monytix.ai')
 const hasPath = rawApiUrl !== API_BASE_URL
 
-if (hasPath || isWrongHostname) {
-  console.error('[API] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL is incorrectly configured!')
+// If hostname is wrong, use the correct default API URL
+if (isWrongHostname) {
+  console.error('[API] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL points to frontend domain instead of API domain!')
   console.error('[API] Current value:', rawApiUrl)
-  if (hasPath) {
-    console.error('[API] ❌ Contains a path (should be base URL only)')
-  }
-  if (isWrongHostname) {
-    console.error('[API] ❌ Points to frontend domain (mvp.monytix.ai) instead of API domain')
-  }
-  console.error('[API] ✅ Should be: https://api.monytix.ai')
+  console.error('[API] Using fallback: https://api.monytix.ai')
   console.error('[API] Fix in Cloudflare Pages → Settings → Environment Variables')
-  console.error('[API] Note: NEXT_PUBLIC_API_URL is for the BACKEND API, not the frontend!')
+  console.error('[API] Set NEXT_PUBLIC_API_URL to: https://api.monytix.ai')
+  API_BASE_URL = 'https://api.monytix.ai'
+} else if (hasPath) {
+  console.warn('[API] ⚠️ NEXT_PUBLIC_API_URL contains a path (auto-stripped)')
+  console.warn('[API] Current value:', rawApiUrl)
+  console.warn('[API] Using:', API_BASE_URL)
+  console.warn('[API] Fix in Cloudflare Pages → Settings → Environment Variables')
 }
 
 const REQUEST_TIMEOUT = 10000 // 10 seconds
