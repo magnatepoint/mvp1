@@ -172,10 +172,20 @@ async def create_transaction(
     service: SpendSenseService = Depends(get_service),
 ) -> TransactionRecord:
     """Create a manual transaction."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
-        return await service.create_manual_transaction(user.user_id, data)
+        logger.info(f"Creating manual transaction for user {user.user_id}: merchant={data.merchant_name}, amount={data.amount}, direction={data.direction}")
+        result = await service.create_manual_transaction(user.user_id, data)
+        logger.info(f"Successfully created transaction {result.txn_id} for user {user.user_id}")
+        return result
     except ValueError as exc:
+        logger.warning(f"Validation error creating transaction for user {user.user_id}: {exc}")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(f"Error creating manual transaction for user {user.user_id}: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(exc)}") from exc
 
 
 @router.get(
