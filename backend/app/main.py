@@ -38,26 +38,34 @@ def create_app() -> FastAPI:
     )
 
     frontend_origin = str(settings.frontend_origin).rstrip("/")
+    
+    # Parse multiple frontend origins from environment variable (comma-separated)
+    # This allows supporting multiple frontend deployments (e.g., Cloudflare Pages, Vercel, etc.)
+    frontend_origins = [origin.strip() for origin in frontend_origin.split(",") if origin.strip()]
+    
     # Allow both Vite (5173) and Next.js (3000) dev servers
     # Also allow Flutter app connections (mobile apps don't have origins, but we allow all for dev)
     allowed_origins = [
-        frontend_origin,
-        f"{frontend_origin}/",
+        *frontend_origins,
+        *[f"{origin}/" for origin in frontend_origins],  # Add trailing slash variants
         "http://localhost:3000",
         "http://localhost:3000/",
+        "http://localhost:5173",
+        "http://localhost:5173/",
         "http://127.0.0.1:8001",
         "http://10.0.2.2:8001",  # Android emulator
         "*",  # Allow all origins for development (Flutter apps)
     ]
     
-    # In production, allow frontend origin and mobile apps
+    # In production, allow frontend origins and mobile apps
     # Mobile apps (iOS, Android, Flutter) don't have traditional origins,
     # so we need to allow all origins for them to work
     if settings.environment == "production":
-        # Allow frontend web origin and all origins for mobile apps
+        # Allow all configured frontend origins and all origins for mobile apps
         # Security is handled through authentication tokens, not CORS
         cors_origins = [
-            str(settings.frontend_origin),
+            *frontend_origins,
+            *[f"{origin}/" for origin in frontend_origins],  # Add trailing slash variants
             "*",  # Allow all origins for mobile apps (iOS, Android, Flutter)
         ]
     else:
