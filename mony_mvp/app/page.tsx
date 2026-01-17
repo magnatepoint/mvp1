@@ -45,15 +45,25 @@ export default function Home() {
 
   const validateSessionWithBackend = async (session: Session) => {
     try {
-      // Validate API URL - should not contain paths
+      // Validate API URL - should not contain paths and should point to API domain
       const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
       const API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths
       
       // Warn if incorrectly configured
-      if (rawApiUrl !== API_BASE_URL) {
-        console.error('[Debug] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL is incorrectly set!')
+      const urlObj = new URL(API_BASE_URL)
+      const isWrongHostname = urlObj.hostname === 'mvp.monytix.ai' || urlObj.hostname.includes('mvp.monytix.ai')
+      const hasPath = rawApiUrl !== API_BASE_URL
+      
+      if (hasPath || isWrongHostname) {
+        console.error('[Debug] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL is incorrectly configured!')
         console.error('[Debug] Current value:', rawApiUrl)
-        console.error('[Debug] Should be:', API_BASE_URL)
+        if (hasPath) {
+          console.error('[Debug] ❌ Contains a path (should be base URL only)')
+        }
+        if (isWrongHostname) {
+          console.error('[Debug] ❌ Points to frontend domain instead of API domain')
+        }
+        console.error('[Debug] ✅ Should be: https://api.monytix.ai')
         console.error('[Debug] Fix in Cloudflare Pages → Settings → Environment Variables')
       }
       

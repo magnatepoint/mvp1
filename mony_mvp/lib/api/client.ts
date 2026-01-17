@@ -4,12 +4,23 @@ import type { Session } from '@supabase/supabase-js'
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
 const API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths, keep only protocol://host
 
-// Warn if API URL was incorrectly set with a path
-if (rawApiUrl !== API_BASE_URL) {
-  console.error('[API] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL contains a path!')
+// Warn if API URL was incorrectly set with a path or wrong hostname
+const urlObj = new URL(API_BASE_URL)
+const isWrongHostname = urlObj.hostname === 'mvp.monytix.ai' || urlObj.hostname.includes('mvp.monytix.ai')
+const hasPath = rawApiUrl !== API_BASE_URL
+
+if (hasPath || isWrongHostname) {
+  console.error('[API] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL is incorrectly configured!')
   console.error('[API] Current value:', rawApiUrl)
-  console.error('[API] Should be:', API_BASE_URL)
-  console.error('[API] Fix this in Cloudflare Pages → Settings → Environment Variables')
+  if (hasPath) {
+    console.error('[API] ❌ Contains a path (should be base URL only)')
+  }
+  if (isWrongHostname) {
+    console.error('[API] ❌ Points to frontend domain (mvp.monytix.ai) instead of API domain')
+  }
+  console.error('[API] ✅ Should be: https://api.monytix.ai')
+  console.error('[API] Fix in Cloudflare Pages → Settings → Environment Variables')
+  console.error('[API] Note: NEXT_PUBLIC_API_URL is for the BACKEND API, not the frontend!')
 }
 
 const REQUEST_TIMEOUT = 10000 // 10 seconds
