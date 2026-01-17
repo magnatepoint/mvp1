@@ -9,7 +9,8 @@ interface SpendingTrendsChartProps {
 }
 
 export default function SpendingTrendsChart({ data }: SpendingTrendsChartProps) {
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | undefined) => {
+    if (value === undefined || value === null) return '₹0'
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -50,7 +51,7 @@ export default function SpendingTrendsChart({ data }: SpendingTrendsChartProps) 
               border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: '8px',
             }}
-            formatter={(value: number) => formatCurrency(value)}
+            formatter={(value) => formatCurrency(value)}
           />
           <Legend />
           <Line

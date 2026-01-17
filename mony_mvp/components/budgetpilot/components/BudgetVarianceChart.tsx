@@ -9,7 +9,8 @@ interface BudgetVarianceChartProps {
 }
 
 export default function BudgetVarianceChart({ variance }: BudgetVarianceChartProps) {
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | undefined) => {
+    if (value === undefined || value === null) return '₹0'
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -60,7 +61,7 @@ export default function BudgetVarianceChart({ variance }: BudgetVarianceChartPro
               border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: '8px',
             }}
-            formatter={(value: number) => formatCurrency(value)}
+            formatter={(value) => formatCurrency(value)}
           />
           <Legend />
           <Bar dataKey="planned" name="Planned" fill="#3b82f6" />
