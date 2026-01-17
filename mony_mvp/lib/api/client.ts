@@ -3,6 +3,8 @@ import type { Session } from '@supabase/supabase-js'
 // Validate API URL - should not contain paths like /auth/callback
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
 let API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths, keep only protocol://host
+// Ensure no trailing slash
+API_BASE_URL = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
 
 // Check if API URL is incorrectly configured
 const urlObj = new URL(API_BASE_URL)
@@ -36,8 +38,10 @@ export async function fetchWithAuth<T>(
     throw new Error('Authentication required. Please log in again.')
   }
 
-  // Construct full URL
-  const fullUrl = `${API_BASE_URL}${endpoint}`
+  // Construct full URL - normalize to prevent double slashes
+  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+  const endpointPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const fullUrl = `${baseUrl}${endpointPath}`
   
   // Always log API calls for debugging (helps diagnose production issues)
   console.log(`[API] ${options?.method || 'GET'} ${fullUrl}`)

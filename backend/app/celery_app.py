@@ -58,10 +58,19 @@ try:
     # The @celery_app.task decorator registers it when the module is imported
     if hasattr(watch_renewal, 'renew_gmail_watches_task'):
         _logger.info("Registered gmail.renew_watches task from watch_renewal module")
+        # Explicitly register the task to ensure it's available
+        celery_app.tasks.register(watch_renewal.renew_gmail_watches_task)
     else:
         _logger.warning("watch_renewal module imported but renew_gmail_watches_task not found")
 except ImportError as e:
     _logger.warning(f"Failed to import gmail.watch_renewal: {e}")
 except Exception as e:
     _logger.warning(f"Unexpected error importing gmail.watch_renewal: {e}")
+
+# Ensure gmail tasks are imported for worker discovery
+try:
+    from app.gmail import tasks  # noqa: F401
+    _logger.info("Imported app.gmail.tasks for task discovery")
+except ImportError as e:
+    _logger.warning(f"Failed to import app.gmail.tasks: {e}")
 

@@ -38,7 +38,9 @@ export async function uploadStatementFile(
     formData.append('password', password.trim())
   }
 
-  const endpoint = `${API_BASE_URL}/v1/spendsense/uploads/file`
+  // Normalize URL to prevent double slashes
+  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+  const endpoint = `${baseUrl}/v1/spendsense/uploads/file`
 
   // Development logging
   if (process.env.NODE_ENV === 'development') {
