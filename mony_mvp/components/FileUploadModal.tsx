@@ -116,6 +116,8 @@ export default function FileUploadModal({
           errorMessage = 'CORS error: Unable to connect to the server. Please check that the backend API is running and accessible.'
         } else if (err.message.includes('Authentication') || err.message.includes('session')) {
           errorMessage = 'Your session has expired. Please refresh the page and try again.'
+        } else if (err.message.includes('No tabular data') || err.message.includes('scanned') || err.message.includes('image-based')) {
+          errorMessage = 'This PDF cannot be processed because it appears to be scanned or image-based. We can only process PDFs with extractable text and tables. Please use the original digital PDF or manually enter transactions.'
         }
       }
       
@@ -284,7 +286,19 @@ export default function FileUploadModal({
         {/* Error Message */}
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-400 font-medium mb-1">Upload Error</p>
+            <p className="text-sm text-red-300">{error}</p>
+            {error.toLowerCase().includes('scanned') || error.toLowerCase().includes('image-based') || error.toLowerCase().includes('no tabular data') ? (
+              <div className="mt-2 p-2 bg-orange-500/10 border border-orange-500/20 rounded text-xs text-orange-300">
+                <p className="font-medium mb-1">💡 Tip:</p>
+                <p>This PDF appears to be scanned or image-based. We can only process PDFs with extractable text. Try:</p>
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li>Using the original digital PDF (not a scanned copy)</li>
+                  <li>Converting the scanned PDF to text using OCR software first</li>
+                  <li>Manually entering transactions if the PDF can't be processed</li>
+                </ul>
+              </div>
+            ) : null}
           </div>
         )}
 
