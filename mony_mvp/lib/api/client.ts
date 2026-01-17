@@ -16,12 +16,11 @@ export async function fetchWithAuth<T>(
   // Construct full URL
   const fullUrl = `${API_BASE_URL}${endpoint}`
   
-  // Log API URL for debugging (always log in case of issues)
-  if (process.env.NODE_ENV === 'development' || !process.env.NEXT_PUBLIC_API_URL) {
-    console.log(`[API] ${options?.method || 'GET'} ${fullUrl}`)
-    if (!process.env.NEXT_PUBLIC_API_URL) {
-      console.warn('[API] NEXT_PUBLIC_API_URL not set, using default:', API_BASE_URL)
-    }
+  // Always log API calls for debugging (helps diagnose production issues)
+  console.log(`[API] ${options?.method || 'GET'} ${fullUrl}`)
+  if (!process.env.NEXT_PUBLIC_API_URL) {
+    console.warn('[API] ⚠️ NEXT_PUBLIC_API_URL not set, using default:', API_BASE_URL)
+    console.warn('[API] Set this in Cloudflare Pages → Settings → Environment Variables')
   }
 
   try {
@@ -103,32 +102,33 @@ export async function fetchWithAuth<T>(
       throw fetchError
     }
   } catch (error: any) {
-    // Handle network errors (CORS, connectivity, etc.)
-    if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      // Check if it's a CORS error or connectivity issue
-      const isCorsError = error.message.includes('CORS') || 
-                         (typeof window !== 'undefined' && !navigator.onLine)
-      
-      const networkError = new Error(
-        isCorsError
-          ? 'CORS error: Unable to connect to the server. Please check your internet connection and ensure the API server is running.'
-          : 'Network error: Unable to reach the server. Please check your internet connection and try again.'
-      )
-      ;(networkError as any).isNetworkError = true
-      ;(networkError as any).isCorsError = isCorsError
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[API Error]', {
+      // Handle network errors (CORS, connectivity, etc.)
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        // Check if it's a CORS error or connectivity issue
+        const isCorsError = error.message.includes('CORS') || 
+                           (typeof window !== 'undefined' && !navigator.onLine)
+        
+        // Always log network errors with full details for debugging
+        console.error('[API Error] Failed to fetch', {
           endpoint,
           url: fullUrl,
+          apiBaseUrl: API_BASE_URL,
+          envVarSet: !!process.env.NEXT_PUBLIC_API_URL,
           error: error.message,
           isCorsError,
           online: typeof window !== 'undefined' ? navigator.onLine : 'unknown',
         })
+        
+        const networkError = new Error(
+          isCorsError
+            ? `CORS error: Unable to connect to ${API_BASE_URL}. Check backend CORS configuration and FRONTEND_ORIGIN environment variable.`
+            : `Network error: Unable to reach ${API_BASE_URL}. Check if the API is running and accessible.`
+        )
+        ;(networkError as any).isNetworkError = true
+        ;(networkError as any).isCorsError = isCorsError
+        
+        throw networkError
       }
-      
-      throw networkError
-    }
     
     // Re-throw other errors (including our custom errors)
     throw error
