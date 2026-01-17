@@ -11,12 +11,29 @@ interface SpendingPatternsChartProps {
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 export default function SpendingPatternsChart({ data }: SpendingPatternsChartProps) {
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | string | readonly (string | number)[] | undefined) => {
+    if (value === undefined || value === null) return '₹0'
+    
+    // Handle arrays - take the first value
+    let numValue: number
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '₹0'
+      const firstValue = value[0]
+      numValue = typeof firstValue === 'string' ? parseFloat(firstValue) : (typeof firstValue === 'number' ? firstValue : 0)
+    } else if (typeof value === 'string') {
+      numValue = parseFloat(value)
+    } else if (typeof value === 'number') {
+      numValue = value
+    } else {
+      return '₹0'
+    }
+    
+    if (isNaN(numValue)) return '₹0'
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0,
-    }).format(value)
+    }).format(numValue)
   }
 
   // Sort data by day of week
@@ -56,10 +73,30 @@ export default function SpendingPatternsChart({ data }: SpendingPatternsChartPro
               border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: '8px',
             }}
-            formatter={(value: number, name: string) => [
-              name === 'amount' ? formatCurrency(value) : value,
-              name === 'amount' ? 'Spending' : 'Transactions',
-            ]}
+            formatter={(value, name) => {
+              if (value === undefined || value === null) return ['₹0', name === 'amount' ? 'Spending' : 'Transactions']
+              
+              // Handle value conversion
+              let numValue: number
+              if (Array.isArray(value)) {
+                if (value.length === 0) return ['₹0', name === 'amount' ? 'Spending' : 'Transactions']
+                const firstValue = value[0]
+                numValue = typeof firstValue === 'string' ? parseFloat(firstValue) : (typeof firstValue === 'number' ? firstValue : 0)
+              } else if (typeof value === 'string') {
+                numValue = parseFloat(value)
+              } else if (typeof value === 'number') {
+                numValue = value
+              } else {
+                return ['₹0', name === 'amount' ? 'Spending' : 'Transactions']
+              }
+              
+              if (isNaN(numValue)) return ['₹0', name === 'amount' ? 'Spending' : 'Transactions']
+              
+              return [
+                name === 'amount' ? formatCurrency(numValue) : numValue.toString(),
+                name === 'amount' ? 'Spending' : 'Transactions',
+              ]
+            }}
           />
           <Legend />
           <Bar dataKey="amount" fill="#3b82f6" name="Spending" />
