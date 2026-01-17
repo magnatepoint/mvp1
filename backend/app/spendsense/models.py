@@ -75,6 +75,7 @@ class CategoryResponse(BaseModel):
     category_code: str
     category_name: str
     is_custom: bool = False
+    txn_type: str | None = None
 
 
 class SubcategoryResponse(BaseModel):

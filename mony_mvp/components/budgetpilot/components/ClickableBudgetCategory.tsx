@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { fetchTransactions } from '@/lib/api/spendsense'
+import { fetchTransactions, fetchCategories } from '@/lib/api/spendsense'
 import type { Transaction } from '@/types/spendsense'
 import { glassCardSecondary } from '@/lib/theme/glass'
 
@@ -74,18 +74,39 @@ export default function ClickableBudgetCategory({
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
       const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
 
-      const response = await fetchTransactions(session, {
-        limit: 50,
-        direction: 'debit',
-        start_date: firstDay.toISOString().split('T')[0],
-        end_date: lastDay.toISOString().split('T')[0],
+      // Fetch transactions and categories in parallel
+      const [transactionsResponse, categories] = await Promise.all([
+        fetchTransactions(session, {
+          limit: 200, // Get more to filter client-side
+          direction: 'debit',
+          start_date: firstDay.toISOString().split('T')[0],
+          end_date: lastDay.toISOString().split('T')[0],
+        }),
+        fetchCategories(session),
+      ])
+
+      // Build category_code -> txn_type mapping
+      const categoryTxnTypeMap = new Map<string, string>()
+      categories.forEach((cat) => {
+        if (cat.category_code && cat.txn_type) {
+          categoryTxnTypeMap.set(cat.category_code, cat.txn_type)
+        }
       })
 
-      // Note: We can't directly filter by txn_type (needs/wants/assets) via API
-      // The transactions would need to be filtered client-side based on category txn_type
-      // For now, show all transactions - the modal can be enhanced later
+      // Filter transactions by txn_type
+      // Map txnType prop to expected values: 'needs' | 'wants' | 'assets'
+      const expectedTxnType = txnType === 'assets' ? 'assets' : txnType
+      
+      const filteredTransactions = transactionsResponse.transactions.filter((txn) => {
+        if (!txn.category) {
+          return false // Skip uncategorized transactions
+        }
+        const txnTypeForCategory = categoryTxnTypeMap.get(txn.category) || 'wants'
+        return txnTypeForCategory === expectedTxnType
+      })
+
       if (onViewTransactions) {
-        onViewTransactions(response.transactions)
+        onViewTransactions(filteredTransactions)
       } else {
         setExpanded(true)
       }

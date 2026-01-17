@@ -95,6 +95,7 @@ export interface Category {
   category_code: string
   category_name: string
   is_custom: boolean
+  txn_type?: string | null
 }
 
 export interface Subcategory {

@@ -1299,7 +1299,7 @@ class SpendSenseService:
         """Get all active categories (system + user's custom)."""
         if user_id:
             query = """
-            SELECT category_code, category_name, is_custom
+            SELECT category_code, category_name, is_custom, txn_type
             FROM spendsense.dim_category
             WHERE active = TRUE AND (user_id = $1 OR user_id IS NULL)
             ORDER BY is_custom, display_order, category_name
@@ -1307,7 +1307,7 @@ class SpendSenseService:
             rows = await self._pool.fetch(query, user_id)
         else:
             query = """
-            SELECT category_code, category_name, is_custom
+            SELECT category_code, category_name, is_custom, txn_type
             FROM spendsense.dim_category
             WHERE active = TRUE AND user_id IS NULL
             ORDER BY display_order, category_name
@@ -1318,6 +1318,7 @@ class SpendSenseService:
                 "category_code": row["category_code"],
                 "category_name": row["category_name"],
                 "is_custom": row.get("is_custom", False),
+                "txn_type": row.get("txn_type", "wants"),  # Default to 'wants' if not set
             }
             for row in rows
         ]
