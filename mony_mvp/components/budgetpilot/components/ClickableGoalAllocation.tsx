@@ -43,11 +43,16 @@ export default function ClickableGoalAllocation({
 
     setLoading(true)
     try {
-      // Fetch both progress and full goal details
+      // Fetch both progress and full goal details in parallel
       const [goals, goalDetail] = await Promise.all([
         fetchGoalProgress(session).catch(() => []),
         getGoal(session, goalId).catch(() => null),
       ])
+      
+      // Set goal details first so it's available even if progress fetch fails
+      if (goalDetail) {
+        setGoalDetails(goalDetail)
+      }
 
       const goal = goals.find((g) => g.goal_id === goalId)
       
@@ -143,29 +148,28 @@ export default function ClickableGoalAllocation({
             <span className="text-base font-semibold text-white">{goalName}</span>
           </div>
           
-          {/* Show total goal amount if available, otherwise show monthly allocation */}
-          {expanded && goalDetails ? (
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-gray-400">Total Goal:</span>
-              <span className="text-xl font-bold text-white">{formatCurrency(goalDetails.estimated_cost)}</span>
+          {/* Show total goal amount prominently */}
+          {goalDetails ? (
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-300">Total Goal:</span>
+              <span className="text-2xl font-bold text-white">{formatCurrency(goalDetails.estimated_cost)}</span>
+            </div>
+          ) : goalProgress ? (
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-300">Total Goal:</span>
+              <span className="text-2xl font-bold text-white">
+                {formatCurrency(goalProgress.current_savings_close + goalProgress.remaining_amount)}
+              </span>
             </div>
           ) : null}
           
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-400">Monthly allocation:</span>
-            <span className="text-lg font-bold text-[#D4AF37]">{formatCurrency(plannedAmount)}</span>
+            <span className="text-base font-semibold text-[#D4AF37]">{formatCurrency(plannedAmount)}</span>
           </div>
 
           {expanded && (goalProgress || goalDetails) && (
             <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
-              {/* Total Goal Amount */}
-              {goalDetails && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">Total Goal:</span>
-                  <span className="text-xl font-bold text-white">{formatCurrency(goalDetails.estimated_cost)}</span>
-                </div>
-              )}
-
               {/* Progress */}
               {goalProgress && (
                 <>
