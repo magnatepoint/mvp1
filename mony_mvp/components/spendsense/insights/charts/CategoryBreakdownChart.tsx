@@ -97,10 +97,17 @@ export default function CategoryBreakdownChart({ data, onCategoryClick }: Catego
               border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: '8px',
             }}
-            formatter={(value: number, name: string, props: any) => [
-              formatCurrency(value),
-              `${props.payload.percentage.toFixed(1)}%`,
-            ]}
+            formatter={(value) => {
+              const numValue = typeof value === 'number' ? value : (typeof value === 'string' ? parseFloat(value) : 0)
+              return formatCurrency(numValue)
+            }}
+            labelFormatter={(label, payload) => {
+              if (payload && payload.length > 0) {
+                const percentage = payload[0].payload?.percentage || 0
+                return `${label}: ${percentage.toFixed(1)}%`
+              }
+              return label
+            }}
           />
           <Legend
             formatter={(value, entry: any) => (
