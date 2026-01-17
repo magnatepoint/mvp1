@@ -6,11 +6,14 @@ import {
   fetchBudgetRecommendations,
   fetchCommittedBudget,
   commitBudget,
+  fetchBudgetVariance,
 } from '@/lib/api/budget'
-import type { BudgetRecommendation, CommittedBudget, BudgetCommitRequest } from '@/types/budget'
+import type { BudgetRecommendation, CommittedBudget, BudgetCommitRequest, BudgetVariance } from '@/types/budget'
 import BudgetPilotWelcomeBanner from './BudgetPilotWelcomeBanner'
-import CommittedBudgetCard from './components/CommittedBudgetCard'
-import BudgetRecommendationCard from './components/BudgetRecommendationCard'
+import EnhancedCommittedBudgetCard from './components/EnhancedCommittedBudgetCard'
+import EnhancedBudgetRecommendationCard from './components/EnhancedBudgetRecommendationCard'
+import BudgetInfoCard from './components/BudgetInfoCard'
+import BudgetComparisonModal from './components/BudgetComparisonModal'
 
 interface BudgetPilotProps {
   session: Session
@@ -20,39 +23,50 @@ interface BudgetPilotProps {
 export default function BudgetPilot({ session }: BudgetPilotProps) {
   const [recommendations, setRecommendations] = useState<BudgetRecommendation[]>([])
   const [committedBudget, setCommittedBudget] = useState<CommittedBudget | null>(null)
+  const [variance, setVariance] = useState<BudgetVariance | null>(null)
   const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(true)
   const [isCommittedLoading, setIsCommittedLoading] = useState(true)
+  const [isVarianceLoading, setIsVarianceLoading] = useState(true)
   const [recommendationsError, setRecommendationsError] = useState<string | null>(null)
   const [committedError, setCommittedError] = useState<string | null>(null)
   const [isCommitting, setIsCommitting] = useState(false)
   const [committingPlanCode, setCommittingPlanCode] = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [comparingRecommendation, setComparingRecommendation] = useState<BudgetRecommendation | null>(null)
 
   const loadData = async () => {
-    // Load both in parallel
+    // Load all data in parallel
     setIsRecommendationsLoading(true)
     setIsCommittedLoading(true)
+    setIsVarianceLoading(true)
     setRecommendationsError(null)
     setCommittedError(null)
 
     try {
-      const [recommendationsData, committedData] = await Promise.all([
-        fetchBudgetRecommendations(session).catch((err) => {
+      const [recommendationsData, committedData, varianceData] = await Promise.all([
+        fetchBudgetRecommendations(session, selectedMonth || undefined).catch((err) => {
           setRecommendationsError(err instanceof Error ? err.message : 'Failed to load recommendations')
           return []
         }),
-        fetchCommittedBudget(session).catch((err) => {
+        fetchCommittedBudget(session, selectedMonth || undefined).catch((err) => {
           setCommittedError(err instanceof Error ? err.message : 'Failed to load committed budget')
+          return null
+        }),
+        fetchBudgetVariance(session, selectedMonth || undefined).catch((err) => {
+          console.error('Failed to load budget variance:', err)
           return null
         }),
       ])
 
       setRecommendations(recommendationsData)
       setCommittedBudget(committedData)
+      setVariance(varianceData)
     } catch (err) {
       console.error('Error loading budget data:', err)
     } finally {
       setIsRecommendationsLoading(false)
       setIsCommittedLoading(false)
+      setIsVarianceLoading(false)
     }
   }
 
@@ -97,33 +111,83 @@ export default function BudgetPilot({ session }: BudgetPilotProps) {
             </p>
           </div>
 
-          {/* Refresh Button */}
-          <button
-            onClick={loadData}
-            disabled={isRecommendationsLoading || isCommittedLoading}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
-            title="Refresh"
-          >
-            <svg
-              className="w-6 h-6 text-[#D4AF37]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Month Selector */}
+            <input
+              type="month"
+              value={selectedMonth || new Date().toISOString().slice(0, 7)}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value)
+                // Reload data when month changes
+                setTimeout(() => loadData(), 100)
+              }}
+              className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm"
+            />
 
+            {/* Refresh Button */}
+            <button
+              onClick={loadData}
+              disabled={isRecommendationsLoading || isCommittedLoading}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+              title="Refresh"
+            >
+              <svg
+                className="w-6 h-6 text-[#D4AF37]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="space-y-6 pb-6">
+        {/* Quick Stats */}
+        {committedBudget && variance && (
+          <div className="px-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <BudgetInfoCard
+              title="Monthly Income"
+              value={new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0,
+              }).format(variance.income_amt)}
+              icon="💰"
+              color="green"
+            />
+            <BudgetInfoCard
+              title="Total Spending"
+              value={new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0,
+              }).format(variance.needs_amt + variance.wants_amt)}
+              icon="📊"
+              color="orange"
+            />
+            <BudgetInfoCard
+              title="Savings Rate"
+              value={`${variance.income_amt > 0 ? ((variance.assets_amt / variance.income_amt) * 100).toFixed(1) : 0}%`}
+              subtitle={new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0,
+              }).format(variance.assets_amt)}
+              icon="🎯"
+              color="purple"
+            />
+          </div>
+        )}
+
         {/* Committed Budget Section */}
         {isCommittedLoading ? (
           <div className="flex items-center justify-center py-10 px-4">
@@ -131,10 +195,31 @@ export default function BudgetPilot({ session }: BudgetPilotProps) {
           </div>
         ) : committedBudget ? (
           <div className="space-y-4 px-4">
-            <h2 className="text-xl font-bold text-white">Your Committed Budget</h2>
-            <CommittedBudgetCard committedBudget={committedBudget} />
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Your Committed Budget</h2>
+              {!isVarianceLoading && variance && (
+                <span className="text-xs text-gray-400">
+                  {new Date(variance.month).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+            <EnhancedCommittedBudgetCard
+              session={session}
+              committedBudget={committedBudget}
+              variance={variance}
+            />
           </div>
-        ) : null}
+        ) : (
+          <div className="px-4">
+            <div className={`${glassCardPrimary} p-8 text-center`}>
+              <span className="text-5xl mb-4 block">📊</span>
+              <h3 className="text-lg font-semibold text-white mb-2">No Budget Committed</h3>
+              <p className="text-sm text-gray-400">
+                Commit to a budget plan below to start tracking your spending against your goals.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Recommendations Section */}
         <div className="space-y-4 px-4">
@@ -170,7 +255,7 @@ export default function BudgetPilot({ session }: BudgetPilotProps) {
           ) : (
             <div className="space-y-4">
               {recommendations.map((recommendation) => (
-                <BudgetRecommendationCard
+                <EnhancedBudgetRecommendationCard
                   key={recommendation.plan_code}
                   recommendation={recommendation}
                   isCommitted={
@@ -180,12 +265,23 @@ export default function BudgetPilot({ session }: BudgetPilotProps) {
                     isCommitting && committingPlanCode === recommendation.plan_code
                   }
                   onCommit={() => handleCommit(recommendation.plan_code)}
+                  onCompare={() => setComparingRecommendation(recommendation)}
                 />
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {/* Comparison Modal */}
+      {comparingRecommendation && (
+        <BudgetComparisonModal
+          committedBudget={committedBudget}
+          recommendation={comparingRecommendation}
+          isOpen={!!comparingRecommendation}
+          onClose={() => setComparingRecommendation(null)}
+        />
+      )}
     </div>
   )
 }
