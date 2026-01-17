@@ -9,13 +9,15 @@ interface BudgetVarianceChartProps {
 }
 
 export default function BudgetVarianceChart({ variance }: BudgetVarianceChartProps) {
-  const formatCurrency = (value: number | undefined) => {
+  const formatCurrency = (value: number | string | undefined) => {
     if (value === undefined || value === null) return '₹0'
+    const numValue = typeof value === 'string' ? parseFloat(value) : value
+    if (isNaN(numValue)) return '₹0'
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0,
-    }).format(value)
+    }).format(numValue)
   }
 
   const data = [
