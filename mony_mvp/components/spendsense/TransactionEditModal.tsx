@@ -26,7 +26,7 @@ export default function TransactionEditModal({
     merchant_name: transaction.merchant || null,
     category_code: null,
     subcategory_code: null,
-    channel: transaction.channel || null,
+    channel: transaction.channel ? transaction.channel.toLowerCase() : null,
     txn_type: null,
   })
   const [categories, setCategories] = useState<Category[]>([])
@@ -34,19 +34,34 @@ export default function TransactionEditModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Reset form data when modal opens or transaction changes
   useEffect(() => {
     if (isOpen) {
+      setFormData({
+        merchant_name: transaction.merchant || null,
+        category_code: null,
+        subcategory_code: null,
+        channel: transaction.channel ? transaction.channel.toLowerCase() : null,
+        txn_type: null,
+      })
+      setSubcategories([])
+      setError(null)
       loadCategories()
     }
-  }, [isOpen])
+  }, [isOpen, transaction.txn_id])
 
   useEffect(() => {
-    if (categories.length > 0 && transaction.category) {
-      const foundCat = categories.find((c) => c.category_name === transaction.category)
+    if (categories.length > 0 && transaction.category && !formData.category_code) {
+      // Use case-insensitive, trimmed matching for better reliability
+      const transactionCategory = transaction.category.trim()
+      const foundCat = categories.find((c) => 
+        c.category_name.trim().toLowerCase() === transactionCategory.toLowerCase()
+      )
       if (foundCat) {
         setFormData((prev) => ({ ...prev, category_code: foundCat.category_code }))
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories, transaction.category])
 
   useEffect(() => {
@@ -56,15 +71,21 @@ export default function TransactionEditModal({
       setSubcategories([])
       setFormData((prev) => ({ ...prev, subcategory_code: null }))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.category_code])
 
   useEffect(() => {
-    if (subcategories.length > 0 && transaction.subcategory) {
-      const foundSub = subcategories.find((s) => s.subcategory_name === transaction.subcategory)
+    if (subcategories.length > 0 && transaction.subcategory && !formData.subcategory_code) {
+      // Use case-insensitive, trimmed matching for better reliability
+      const transactionSubcategory = transaction.subcategory.trim()
+      const foundSub = subcategories.find((s) => 
+        s.subcategory_name.trim().toLowerCase() === transactionSubcategory.toLowerCase()
+      )
       if (foundSub) {
         setFormData((prev) => ({ ...prev, subcategory_code: foundSub.subcategory_code }))
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subcategories, transaction.subcategory])
 
   const loadCategories = async () => {
@@ -72,14 +93,22 @@ export default function TransactionEditModal({
       const cats = await fetchCategories(session)
       setCategories(cats)
       // Set initial category_code if transaction has category
+      // Use case-insensitive, trimmed matching for better reliability
       if (transaction.category) {
-        const foundCat = cats.find((c) => c.category_name === transaction.category)
+        const transactionCategory = transaction.category.trim()
+        const foundCat = cats.find((c) => 
+          c.category_name.trim().toLowerCase() === transactionCategory.toLowerCase()
+        )
         if (foundCat) {
           setFormData((prev) => ({ ...prev, category_code: foundCat.category_code }))
+        } else {
+          // Log for debugging if category name doesn't match
+          console.warn('Category not found in list:', transaction.category, 'Available categories:', cats.map(c => c.category_name))
         }
       }
     } catch (err) {
       console.error('Failed to load categories:', err)
+      setError('Failed to load categories. Please try again.')
     }
   }
 
@@ -88,10 +117,17 @@ export default function TransactionEditModal({
       const subs = await fetchSubcategories(session, categoryCode)
       setSubcategories(subs)
       // Set initial subcategory_code if transaction has subcategory
+      // Use case-insensitive, trimmed matching for better reliability
       if (transaction.subcategory) {
-        const foundSub = subs.find((s) => s.subcategory_name === transaction.subcategory)
+        const transactionSubcategory = transaction.subcategory.trim()
+        const foundSub = subs.find((s) => 
+          s.subcategory_name.trim().toLowerCase() === transactionSubcategory.toLowerCase()
+        )
         if (foundSub) {
           setFormData((prev) => ({ ...prev, subcategory_code: foundSub.subcategory_code }))
+        } else {
+          // Log for debugging if subcategory name doesn't match
+          console.warn('Subcategory not found in list:', transaction.subcategory, 'Available subcategories:', subs.map(s => s.subcategory_name))
         }
       }
     } catch (err) {
@@ -108,6 +144,12 @@ export default function TransactionEditModal({
       return
     }
 
+    // Validate session before attempting update
+    if (!session?.access_token) {
+      setError('Session expired. Please refresh the page and try again.')
+      return
+    }
+
     setLoading(true)
     try {
       await updateTransaction(session, transaction.txn_id, {
@@ -117,7 +159,24 @@ export default function TransactionEditModal({
       onSuccess()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update transaction')
+      console.error('Transaction update error:', err)
+      let errorMessage = 'Failed to update transaction'
+      
+      if (err instanceof Error) {
+        errorMessage = err.message
+        // Provide more helpful messages for common errors
+        if (err.message.includes('Network error')) {
+          errorMessage = 'Unable to connect to server. Please check your internet connection and try again.'
+        } else if (err.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please refresh the page and try again.'
+        } else if (err.message.includes('404')) {
+          errorMessage = 'Transaction not found. It may have been deleted.'
+        } else if (err.message.includes('403') || err.message.includes('401')) {
+          errorMessage = 'You do not have permission to update this transaction.'
+        }
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -205,19 +264,22 @@ export default function TransactionEditModal({
             <label className="block text-sm font-medium mb-2">Channel</label>
             <select
               value={formData.channel || ''}
-              onChange={(e) => setFormData({ ...formData, channel: e.target.value || null })}
+              onChange={(e) => {
+                const channelValue = e.target.value || null
+                setFormData({ ...formData, channel: channelValue ? channelValue.toLowerCase() : null })
+              }}
               disabled={loading}
               className={`w-full ${glassFilter} px-4 py-3 rounded-lg text-foreground disabled:opacity-50`}
             >
-              <option value="">Select channel</option>
-              <option value="upi">UPI</option>
-              <option value="neft">NEFT</option>
-              <option value="imps">IMPS</option>
-              <option value="card">Card</option>
-              <option value="atm">ATM</option>
-              <option value="ach">ACH</option>
-              <option value="nach">NACH</option>
-              <option value="other">Other</option>
+              <option key="channel-empty" value="">Select channel</option>
+              <option key="channel-upi" value="upi">UPI</option>
+              <option key="channel-neft" value="neft">NEFT</option>
+              <option key="channel-imps" value="imps">IMPS</option>
+              <option key="channel-card" value="card">Card</option>
+              <option key="channel-atm" value="atm">ATM</option>
+              <option key="channel-ach" value="ach">ACH</option>
+              <option key="channel-nach" value="nach">NACH</option>
+              <option key="channel-other" value="other">Other</option>
             </select>
           </div>
 

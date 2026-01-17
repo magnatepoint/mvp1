@@ -45,7 +45,18 @@ export default function Home() {
 
   const validateSessionWithBackend = async (session: Session) => {
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
+      // Validate API URL - should not contain paths
+      const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
+      const API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths
+      
+      // Warn if incorrectly configured
+      if (rawApiUrl !== API_BASE_URL) {
+        console.error('[Debug] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL is incorrectly set!')
+        console.error('[Debug] Current value:', rawApiUrl)
+        console.error('[Debug] Should be:', API_BASE_URL)
+        console.error('[Debug] Fix in Cloudflare Pages → Settings → Environment Variables')
+      }
+      
       console.log('[Debug] API URL:', API_BASE_URL)
       
       const response = await fetch(`${API_BASE_URL}/auth/session`, {

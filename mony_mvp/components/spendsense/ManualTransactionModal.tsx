@@ -40,6 +40,7 @@ export default function ManualTransactionModal({
     if (isOpen) {
       loadCategories()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function ManualTransactionModal({
       setSubcategories([])
       setFormData((prev) => ({ ...prev, subcategory_code: null }))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.category_code])
 
   const loadCategories = async () => {

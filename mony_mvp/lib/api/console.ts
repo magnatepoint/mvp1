@@ -37,8 +37,23 @@ export async function fetchInsights(
 
 // Fetch goals from backend
 export async function fetchGoals(session: Session): Promise<GoalProgressItem[]> {
-  const response = await fetchWithAuth<GoalsProgressResponse>(session, '/v1/goals/progress')
-  return response.goals || []
+  try {
+    const response = await fetchWithAuth<GoalsProgressResponse | GoalProgressItem[]>(session, '/v1/goals/progress')
+    // Handle case where backend returns array directly
+    if (Array.isArray(response)) {
+      return response
+    }
+    // Handle case where backend returns object with goals property
+    if (response && typeof response === 'object' && 'goals' in response) {
+      const goalsResponse = response as GoalsProgressResponse
+      return Array.isArray(goalsResponse.goals) ? goalsResponse.goals : []
+    }
+    // Fallback: return empty array
+    return []
+  } catch (error) {
+    console.error('Error fetching goals:', error)
+    return []
+  }
 }
 
 // Calculate savings rate from KPIs
@@ -93,8 +108,9 @@ export function transformToOverviewSummary(
 }
 
 // Transform goals from backend format
-export function transformGoals(goals: GoalProgressItem[]): Goal[] {
-  if (!Array.isArray(goals)) {
+export function transformGoals(goals: GoalProgressItem[] | unknown): Goal[] {
+  // Handle null, undefined, or non-array inputs
+  if (!goals || !Array.isArray(goals)) {
     console.warn('transformGoals received non-array:', goals)
     return []
   }

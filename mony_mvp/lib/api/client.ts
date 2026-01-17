@@ -1,6 +1,17 @@
 import type { Session } from '@supabase/supabase-js'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
+// Validate API URL - should not contain paths like /auth/callback
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
+const API_BASE_URL = rawApiUrl.split('/').slice(0, 3).join('/') // Remove any paths, keep only protocol://host
+
+// Warn if API URL was incorrectly set with a path
+if (rawApiUrl !== API_BASE_URL) {
+  console.error('[API] ⚠️ CRITICAL: NEXT_PUBLIC_API_URL contains a path!')
+  console.error('[API] Current value:', rawApiUrl)
+  console.error('[API] Should be:', API_BASE_URL)
+  console.error('[API] Fix this in Cloudflare Pages → Settings → Environment Variables')
+}
+
 const REQUEST_TIMEOUT = 10000 // 10 seconds
 
 export async function fetchWithAuth<T>(

@@ -3,6 +3,25 @@
 ## Problem
 Frontend at `mvp.monytix.ai` cannot reach backend at `https://api.monytix.ai`, showing "Failed to fetch" errors.
 
+## ⚠️ Common Issue: Incorrect Environment Variable
+
+**If you see errors like:**
+- `[Debug] API URL: https://mvp.monytix.ai/auth/callback`
+- `[API] GET https://mvp.monytix.ai/auth/callback/v1/spendsense/...`
+
+**This means `NEXT_PUBLIC_API_URL` is incorrectly set!**
+
+### Fix in Cloudflare Pages:
+1. Go to **Cloudflare Pages** → Your project → **Settings** → **Environment Variables**
+2. Find `NEXT_PUBLIC_API_URL`
+3. **Current (WRONG):** `https://mvp.monytix.ai/auth/callback`
+4. **Should be:** `https://api.monytix.ai` (no path, just the base URL)
+5. Update and **redeploy** the site
+
+**Note:** `NEXT_PUBLIC_API_URL` should be the backend API URL, NOT the Supabase redirect URL!
+- ✅ `NEXT_PUBLIC_API_URL` = `https://api.monytix.ai`
+- ✅ `NEXT_PUBLIC_SUPABASE_REDIRECT_URL` = `https://mvp.monytix.ai/auth/callback`
+
 ## Backend Status
 ✅ Backend is running on port 8001 and responding to health checks
 ✅ Backend logs show: `Uvicorn running on http://0.0.0.0:8001`

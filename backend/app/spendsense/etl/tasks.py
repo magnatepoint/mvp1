@@ -37,11 +37,47 @@ async def _ingest(
     pdf_password: str | None = None,
 ) -> None:
     conn = None
+    
+    # Helper function to update batch status on error
+    async def update_batch_error(error_msg: str) -> None:
+        """Update batch status to failed with error message."""
+        try:
+            error_conn = await asyncio.wait_for(
+                asyncpg.connect(
+                    str(settings.postgres_dsn),
+                    statement_cache_size=0,
+                    timeout=30,
+                ),
+                timeout=35.0,
+            )
+            try:
+                await error_conn.execute(
+                    """
+                    UPDATE spendsense.upload_batch
+                    SET status='failed', error_json=$2
+                    WHERE upload_id=$1
+                    """,
+                    batch_id,
+                    json.dumps({"error": error_msg}),
+                )
+                logger.error(f"Updated batch {batch_id} status to 'failed': {error_msg}")
+            finally:
+                await error_conn.close()
+        except Exception as update_exc:
+            logger.error(f"Failed to update batch {batch_id} error status: {update_exc}")
+    
     try:
         # Parse file first (before DB connection) to fail fast on parse errors
         logger.info(f"Parsing file: {filename}")
-        records = parse_transactions_file(file_bytes, filename, pdf_password)
-        logger.info(f"Parsed {len(records)} records from {filename}")
+        try:
+            records = parse_transactions_file(file_bytes, filename, pdf_password)
+            logger.info(f"Parsed {len(records)} records from {filename}")
+        except SpendSenseParseError as parse_exc:
+            # Update batch status before re-raising
+            error_msg = str(parse_exc)
+            logger.error(f"Parse error for batch {batch_id}: {error_msg}")
+            await update_batch_error(error_msg)
+            raise
         
         # Now connect to database with retry logic
         logger.info("Connecting to database...")
@@ -294,23 +330,29 @@ async def _ingest(
         )
         logger.info(f"Ingestion complete for batch {batch_id}")
     except SpendSenseParseError as exc:
-        # Try to update batch status if we have a connection
+        error_msg = str(exc)
+        logger.error(f"Parse error for batch {batch_id}: {error_msg}")
+        
+        # Update batch status - create connection if we don't have one
         if conn is not None:
             try:
                 await asyncio.wait_for(
                     conn.execute(
-            """
-            UPDATE spendsense.upload_batch
-            SET status='failed', error_json=$2
-            WHERE upload_id=$1
-            """,
-            batch_id,
-            json.dumps({"error": str(exc)}),
+                        """
+                        UPDATE spendsense.upload_batch
+                        SET status='failed', error_json=$2
+                        WHERE upload_id=$1
+                        """,
+                        batch_id,
+                        json.dumps({"error": error_msg}),
                     ),
-                    timeout=10.0,  # 10 second timeout for error update
-        )
-            except (asyncio.TimeoutError, Exception):
-                pass  # Ignore errors when updating error status
+                    timeout=10.0,
+                )
+            except (asyncio.TimeoutError, Exception) as update_exc:
+                logger.error(f"Failed to update batch {batch_id} status with existing connection: {update_exc}")
+        else:
+            # No connection yet - create one just to update status
+            await update_batch_error(error_msg)
         raise
     except Exception as exc:  # pragma: no cover - safety net
         # Try to update batch status if we have a connection

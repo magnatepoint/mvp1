@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
+const UPLOAD_TIMEOUT = 60000 // 60 seconds for file uploads
 
 export interface UploadProgress {
   loaded: number
@@ -25,6 +26,11 @@ export async function uploadStatementFile(
   password?: string,
   onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadBatch> {
+  // Validate session
+  if (!session?.access_token) {
+    throw new Error('Authentication required. Please log in again.')
+  }
+
   const formData = new FormData()
   formData.append('file', file)
   
@@ -32,8 +38,24 @@ export async function uploadStatementFile(
     formData.append('password', password.trim())
   }
 
+  const endpoint = `${API_BASE_URL}/v1/spendsense/uploads/file`
+
+  // Development logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Upload] Starting upload:', {
+      filename: file.name,
+      size: file.size,
+      type: file.type,
+      endpoint,
+    })
+  }
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
+    let timeoutId: NodeJS.Timeout | null = null
+
+    // Set timeout
+    xhr.timeout = UPLOAD_TIMEOUT
 
     // Track upload progress
     xhr.upload.addEventListener('progress', (e) => {
@@ -44,44 +66,166 @@ export async function uploadStatementFile(
           total: e.total,
           percentage,
         })
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Upload] Progress: ${Math.round(percentage)}%`)
+        }
       }
     })
 
     xhr.addEventListener('load', () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const response = JSON.parse(xhr.responseText)
+          
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[Upload] Success:', response)
+          }
+          
           resolve(response)
         } catch (err) {
-          reject(new Error('Failed to parse upload response'))
+          const parseError = new Error('Failed to parse upload response from server')
+          if (process.env.NODE_ENV === 'development') {
+            console.error('[Upload] Parse error:', err, 'Response:', xhr.responseText)
+          }
+          reject(parseError)
         }
       } else {
-        let errorMessage = `Upload failed: ${xhr.statusText}`
+        let errorMessage = `Upload failed: ${xhr.statusText} (${xhr.status})`
+        
+        // Categorize error by status code
+        if (xhr.status === 401 || xhr.status === 403) {
+          errorMessage = 'Your session has expired. Please refresh the page and try again.'
+        } else if (xhr.status === 400) {
+          errorMessage = 'Invalid file or request. Please check the file format and try again.'
+        } else if (xhr.status === 413) {
+          errorMessage = 'File is too large. Please upload a smaller file.'
+        } else if (xhr.status >= 500) {
+          errorMessage = 'Server error. Please try again later or contact support if the problem persists.'
+        }
+        
         try {
           const errorBody = JSON.parse(xhr.responseText)
           if (errorBody.detail) {
-            errorMessage = typeof errorBody.detail === 'string' 
-              ? errorBody.detail 
-              : JSON.stringify(errorBody.detail)
+            const detail = errorBody.detail
+            errorMessage = typeof detail === 'string' 
+              ? detail 
+              : JSON.stringify(detail)
           }
         } catch {
-          // Ignore parse errors
+          // Use the categorized error message if parsing fails
         }
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[Upload] Server error:', {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            response: xhr.responseText,
+          })
+        }
+        
         reject(new Error(errorMessage))
       }
     })
 
     xhr.addEventListener('error', () => {
-      reject(new Error('Network error during upload'))
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      // Check if it's a network error or CORS error
+      const isNetworkError = !xhr.responseURL || xhr.status === 0
+      const isCorsError = xhr.status === 0 && xhr.readyState === 4
+
+      let errorMessage = 'Network error during upload'
+      
+      if (isCorsError) {
+        errorMessage = 'CORS error: Unable to connect to the server. Please check your internet connection and ensure the API server is running.'
+      } else if (isNetworkError) {
+        errorMessage = 'Network error: Unable to reach the server. Please check your internet connection and try again.'
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Upload] Network error:', {
+          readyState: xhr.readyState,
+          status: xhr.status,
+          responseURL: xhr.responseURL,
+          isCorsError,
+          isNetworkError,
+        })
+      }
+
+      reject(new Error(errorMessage))
+    })
+
+    xhr.addEventListener('timeout', () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      const timeoutError = new Error(
+        'Upload timed out. The file may be too large or the server is taking too long to respond. Please try again with a smaller file.'
+      )
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Upload] Timeout after', UPLOAD_TIMEOUT, 'ms')
+      }
+      
+      reject(timeoutError)
     })
 
     xhr.addEventListener('abort', () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Upload] Aborted by user')
+      }
+
       reject(new Error('Upload was cancelled'))
     })
 
-    xhr.open('POST', `${API_BASE_URL}/v1/spendsense/uploads/file`)
-    xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`)
-    xhr.send(formData)
+    // Set up request
+    try {
+      xhr.open('POST', endpoint)
+      xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`)
+      
+      // Send request
+      xhr.send(formData)
+      
+      // Set a backup timeout (in case xhr.timeout doesn't work in all browsers)
+      timeoutId = setTimeout(() => {
+        if (xhr.readyState !== XMLHttpRequest.DONE) {
+          xhr.abort()
+          reject(new Error(
+            'Upload timed out. The file may be too large or the server is taking too long to respond. Please try again.'
+          ))
+        }
+      }, UPLOAD_TIMEOUT)
+    } catch (err) {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      
+      const setupError = err instanceof Error 
+        ? err 
+        : new Error('Failed to initiate upload request')
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Upload] Setup error:', setupError)
+      }
+      
+      reject(setupError)
+    }
   })
 }
 

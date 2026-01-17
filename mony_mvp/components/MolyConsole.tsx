@@ -15,14 +15,9 @@ export type ConsoleTab = 'overview' | 'accounts' | 'spending' | 'goals' | 'aiIns
 interface MolyConsoleProps {
   session: Session
   onSignOut: () => void
-  onNavigateToSpendSense?: () => void
 }
 
-export default function MolyConsole({
-  session,
-  onSignOut,
-  onNavigateToSpendSense,
-}: MolyConsoleProps) {
+export default function MolyConsole({ session, onSignOut }: MolyConsoleProps) {
   const [selectedTab, setSelectedTab] = useState<ConsoleTab>('overview')
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
@@ -72,54 +67,11 @@ export default function MolyConsole({
         {selectedTab === 'aiInsight' && <AIInsightTab session={session} />}
       </div>
 
-      {/* Header Actions */}
-      <div className="fixed top-4 right-4 z-20 flex gap-2">
-        {onNavigateToSpendSense && (
-          <button
-            onClick={onNavigateToSpendSense}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-            title="SpendSense"
-          >
-            <svg
-              className="w-5 h-5 text-[#D4AF37]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-          </button>
-        )}
-        <button
-          onClick={onSignOut}
-          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-          title="Sign Out"
-        >
-          <svg
-            className="w-5 h-5 text-[#D4AF37]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
-          </svg>
-        </button>
-      </div>
 
       {/* Floating Upload Button */}
       <button
         onClick={() => setIsUploadModalOpen(true)}
-        className="fixed bottom-6 right-6 z-20 w-14 h-14 rounded-full bg-[#D4AF37] text-black shadow-lg hover:bg-[#D4AF37]/90 transition-all hover:scale-110 flex items-center justify-center"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-20 w-14 h-14 rounded-full bg-[#D4AF37] text-black shadow-lg hover:bg-[#D4AF37]/90 transition-all hover:scale-110 flex items-center justify-center"
         title="Upload Statement"
       >
         <svg

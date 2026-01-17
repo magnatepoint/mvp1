@@ -46,3 +46,22 @@ celery_app.autodiscover_tasks(
     ]
 )
 
+# Explicitly import watch_renewal to register the gmail.renew_watches task
+# This is needed because autodiscover only finds "tasks" modules, not other modules
+# Import must happen after autodiscover_tasks for proper registration
+import logging
+_logger = logging.getLogger(__name__)
+
+try:
+    from app.gmail import watch_renewal  # noqa: F401
+    # Force registration by accessing the task function
+    # The @celery_app.task decorator registers it when the module is imported
+    if hasattr(watch_renewal, 'renew_gmail_watches_task'):
+        _logger.info("Registered gmail.renew_watches task from watch_renewal module")
+    else:
+        _logger.warning("watch_renewal module imported but renew_gmail_watches_task not found")
+except ImportError as e:
+    _logger.warning(f"Failed to import gmail.watch_renewal: {e}")
+except Exception as e:
+    _logger.warning(f"Unexpected error importing gmail.watch_renewal: {e}")
+

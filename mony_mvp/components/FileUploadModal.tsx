@@ -80,7 +80,7 @@ export default function FileUploadModal({
     setUploadProgress(0)
 
     try {
-      await uploadStatementFile(
+      const result = await uploadStatementFile(
         session,
         selectedFile,
         password.trim() || undefined,
@@ -88,6 +88,11 @@ export default function FileUploadModal({
           setUploadProgress(progress.percentage)
         }
       )
+
+      // Log success in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Upload] Upload completed successfully:', result)
+      }
 
       // Success - reset and close
       setSelectedFile(null)
@@ -97,8 +102,25 @@ export default function FileUploadModal({
       onUploadComplete?.()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed. Please try again.')
-      console.error('Upload error:', err)
+      let errorMessage = 'Upload failed. Please try again.'
+      
+      if (err instanceof Error) {
+        errorMessage = err.message
+        
+        // Provide more helpful messages for common errors
+        if (err.message.includes('Network error') || err.message.includes('Unable to reach')) {
+          errorMessage = 'Unable to connect to the server. Please check your internet connection and ensure the backend API is running.'
+        } else if (err.message.includes('timeout') || err.message.includes('timed out')) {
+          errorMessage = 'Upload timed out. The file may be too large. Please try again with a smaller file or check your internet connection.'
+        } else if (err.message.includes('CORS')) {
+          errorMessage = 'CORS error: Unable to connect to the server. Please check that the backend API is running and accessible.'
+        } else if (err.message.includes('Authentication') || err.message.includes('session')) {
+          errorMessage = 'Your session has expired. Please refresh the page and try again.'
+        }
+      }
+      
+      setError(errorMessage)
+      console.error('[Upload] Upload error:', err)
     } finally {
       setIsUploading(false)
     }
@@ -291,6 +313,15 @@ export default function FileUploadModal({
           >
             Cancel
           </button>
+          {error && !isUploading && (
+            <button
+              onClick={handleUpload}
+              disabled={!selectedFile || isCheckingPassword}
+              className="flex-1 px-4 py-3 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-400 font-medium hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Retry Upload
+            </button>
+          )}
           <button
             onClick={handleUpload}
             disabled={!selectedFile || isUploading || isCheckingPassword}

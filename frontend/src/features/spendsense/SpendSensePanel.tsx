@@ -215,6 +215,9 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
   const transactionSubcategory = useMemo(() => transaction.subcategory ?? null, [transaction.subcategory])
   const transactionMerchant = useMemo(() => transaction.merchant ?? null, [transaction.merchant])
   const transactionChannel = useMemo(() => transaction.channel ?? null, [transaction.channel])
+  
+  // Stabilize session.access_token to prevent dependency array size changes
+  const sessionToken = useMemo(() => session?.access_token || '', [session?.access_token])
 
   useEffect(() => {
     if (!editing) return
@@ -247,7 +250,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
         if (categoriesError || !categoriesData) {
           console.warn('Supabase direct access failed (tables may be in custom schema), falling back to backend API:', categoriesError?.message)
           const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/categories`, {
-            headers: { Authorization: `Bearer ${session.access_token}` },
+            headers: { Authorization: `Bearer ${sessionToken}` },
           })
           if (!response.ok) {
             throw new Error(`Failed to fetch categories from backend: ${response.statusText}`)
@@ -308,7 +311,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
         if (subcategoriesError || !subcategoriesData) {
           console.warn('Supabase direct access failed (tables may be in custom schema), falling back to backend API:', subcategoriesError?.message)
           const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/subcategories?category_code=${categoryCode}`, {
-            headers: { Authorization: `Bearer ${session.access_token}` },
+            headers: { Authorization: `Bearer ${sessionToken}` },
           })
           if (!response.ok) {
             console.error(`Failed to fetch subcategories from backend: ${response.statusText}`)
@@ -342,7 +345,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
     void fetchCategories()
   }, [
     editing,
-    session.access_token,
+    sessionToken,
     transactionCategory,
     transactionSubcategory,
     transactionMerchant,
@@ -357,7 +360,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({
           category_code: selectedCategory || null,
@@ -419,7 +422,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
               value={selectedChannel}
               onChange={(e) => setSelectedChannel(e.target.value)}
             >
-              <option value="">Auto (based on detection)</option>
+              <option key="channel-auto" value="">Auto (based on detection)</option>
               {CHANNEL_OPTIONS.map((channelOption) => (
                 <option key={channelOption.value} value={channelOption.value}>
                   {channelOption.label}
@@ -459,7 +462,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
                   if (subcategoriesError || !subcategoriesData) {
                     console.warn('Supabase access failed, falling back to backend API:', subcategoriesError)
                     const response = await fetch(`${env.apiBaseUrl}/v1/spendsense/subcategories?category_code=${e.target.value}`, {
-                      headers: { Authorization: `Bearer ${session.access_token}` },
+                      headers: { Authorization: `Bearer ${sessionToken}` },
                     })
                     if (!response.ok) {
                       setError('Failed to load subcategories')
@@ -487,7 +490,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
               }
             }}
           >
-            <option value="">—</option>
+            <option key="category-empty" value="">—</option>
             {categories.map((cat) => (
               <option key={cat.code} value={cat.code}>
                 {cat.name}
@@ -502,7 +505,7 @@ function TransactionRow({ transaction, session, onUpdate, onDelete }: Transactio
             onChange={(e) => setSelectedSubcategory(e.target.value)}
             disabled={!selectedCategory}
           >
-            <option value="">—</option>
+            <option key="subcategory-empty" value="">—</option>
             {subcategories.map((sub) => (
               <option key={sub.code} value={sub.code}>
                 {sub.name}
@@ -1356,7 +1359,7 @@ export function SpendSensePanel({ session }: Props) {
                   onChange={(event) => handleFilterChange({ subcategory: event.target.value })}
                   disabled={!filters.category}
                 >
-                  <option value="">All subcategories</option>
+                  <option key="filter-subcategory-all" value="">All subcategories</option>
                   {filterSubcategories.map((sub) => (
                     <option key={sub.code} value={sub.code}>
                       {sub.name}
@@ -1371,7 +1374,7 @@ export function SpendSensePanel({ session }: Props) {
                   value={filters.channel}
                   onChange={(event) => handleFilterChange({ channel: event.target.value })}
                 >
-                  <option value="">All channels</option>
+                  <option key="filter-channel-all" value="">All channels</option>
                   {CHANNEL_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
