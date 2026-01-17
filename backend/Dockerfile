@@ -14,7 +14,8 @@ WORKDIR /app
 COPY pyproject.toml requirements.txt ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
+# Use python -m pip to avoid issues with pip uninstalling itself
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # Production stage
