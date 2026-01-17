@@ -74,7 +74,9 @@ export default function CategoryBreakdownChart({ data, onCategoryClick }: Catego
             cx="50%"
             cy="50%"
             labelLine={false}
-            label={({ name, percentage }) => {
+            label={(props: any) => {
+              const { name, payload } = props
+              const percentage = payload?.percentage || 0
               // Only show label if percentage is significant
               if (percentage < 3) return ''
               return `${name}: ${percentage.toFixed(1)}%`
