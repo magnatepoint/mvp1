@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { fetchTransactions, deleteTransaction } from '@/lib/api/spendsense'
 import type { Transaction, TransactionListResponse } from '@/types/spendsense'
-import { glassCardSecondary, glassFilter } from '@/lib/theme/glass'
+import { glassCardSecondary, glassCardPrimary, glassFilter } from '@/lib/theme/glass'
 import FileUploadModal from '../FileUploadModal'
 import TransactionDetailModal from './TransactionDetailModal'
 import ManualTransactionModal from './ManualTransactionModal'
@@ -66,11 +66,12 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
 
   useEffect(() => {
     setPage(1)
-  }, [filters, searchText])
+  }, [filters.category_code, filters.subcategory_code, filters.channel, filters.direction, filters.start_date, filters.end_date, searchText])
 
   useEffect(() => {
     loadTransactions()
-  }, [session, page, searchText, filters])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.access_token, page, searchText, filters.category_code, filters.subcategory_code, filters.channel, filters.direction, filters.start_date, filters.end_date])
 
   const handleTransactionClick = (transaction: Transaction) => {
     setSelectedTransaction(transaction)
@@ -255,7 +256,7 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
       )}
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 right-6 z-20 flex flex-col gap-3">
+      <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-20 flex flex-col gap-3">
         {/* Upload Button */}
         <button
           onClick={() => setIsUploadModalOpen(true)}
@@ -289,7 +290,18 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={() => {
-          loadTransactions()
+          // Clear search text and filters to show all transactions after upload
+          setSearchText('')
+          setFilters({
+            category_code: null,
+            subcategory_code: null,
+            channel: null,
+            direction: null,
+            start_date: null,
+            end_date: null,
+          })
+          setPage(1)
+          // loadTransactions will be called automatically by useEffect when searchText/filters change
         }}
       />
 
