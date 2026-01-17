@@ -6,9 +6,14 @@ import SplashScreen from '@/components/SplashScreen'
 import AuthScreen from '@/components/AuthScreen'
 import MolyConsole from '@/components/MolyConsole'
 import SpendSense from '@/components/SpendSense'
+import GoalTracker from '@/components/goaltracker/GoalTracker'
+import BudgetPilot from '@/components/budgetpilot/BudgetPilot'
+import MoneyMoments from '@/components/moneymoments/MoneyMoments'
+import Settings from '@/components/settings/Settings'
+import Navigation from '@/components/navigation/Navigation'
 import type { Session } from '@supabase/supabase-js'
 
-type Screen = 'molyconsole' | 'spendsense'
+export type Screen = 'molyconsole' | 'spendsense' | 'goaltracker' | 'budgetpilot' | 'moneymoments' | 'settings'
 
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true)
@@ -41,6 +46,8 @@ export default function Home() {
   const validateSessionWithBackend = async (session: Session) => {
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai'
+      console.log('[Debug] API URL:', API_BASE_URL)
+      
       const response = await fetch(`${API_BASE_URL}/auth/session`, {
         method: 'GET',
         headers: {
@@ -53,11 +60,17 @@ export default function Home() {
         console.log('Session validated with backend')
       } else {
         // Session invalid, sign out
+        console.warn('Session validation failed:', response.status, response.statusText)
         await supabase.auth.signOut()
         setSession(null)
       }
     } catch (error) {
       console.error('Failed to validate session:', error)
+      // Don't sign out on network errors - might be temporary connectivity issue
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        console.error('Network error - check if NEXT_PUBLIC_API_URL is set correctly in Cloudflare Pages environment variables')
+        console.error('Current API URL:', process.env.NEXT_PUBLIC_API_URL || 'https://api.monytix.ai (default)')
+      }
     }
   }
 
@@ -86,16 +99,36 @@ export default function Home() {
     return <AuthScreen />
   }
 
-  // User is authenticated - show current screen
-  if (currentScreen === 'spendsense') {
-    return <SpendSense session={session} onBack={() => setCurrentScreen('molyconsole')} />
-  }
-
+  // User is authenticated - show current screen with navigation
   return (
-    <MolyConsole
-      session={session}
-      onSignOut={handleSignOut}
-      onNavigateToSpendSense={() => setCurrentScreen('spendsense')}
-    />
+    <div className="relative min-h-screen">
+      {/* Navigation Component */}
+      <Navigation
+        currentScreen={currentScreen}
+        session={session}
+        onNavigate={(screen) => setCurrentScreen(screen)}
+        onSignOut={handleSignOut}
+      />
+
+      {/* Main Content Area */}
+      <div className="min-h-screen bg-[#2E2E2E]">
+        {/* Desktop: Add left margin for sidebar */}
+        <div className="md:ml-64">
+          {/* Mobile: Add bottom padding for bottom nav */}
+          <div className="pb-16 md:pb-0">
+            {currentScreen === 'molyconsole' && (
+              <MolyConsole session={session} onSignOut={handleSignOut} />
+            )}
+            {currentScreen === 'spendsense' && <SpendSense session={session} />}
+            {currentScreen === 'goaltracker' && <GoalTracker session={session} />}
+            {currentScreen === 'budgetpilot' && <BudgetPilot session={session} />}
+            {currentScreen === 'moneymoments' && <MoneyMoments session={session} />}
+            {currentScreen === 'settings' && (
+              <Settings session={session} onSignOut={handleSignOut} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
