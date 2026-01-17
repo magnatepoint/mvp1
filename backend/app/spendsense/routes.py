@@ -114,6 +114,20 @@ async def get_available_months(
     return AvailableMonthsResponse(data=months)
 
 
+@router.post(
+    "/kpis/refresh",
+    summary="Refresh KPI materialized views",
+    status_code=200,
+)
+async def refresh_kpi_views(
+    user: AuthenticatedUser = Depends(get_current_user),
+    service: SpendSenseService = Depends(get_service),
+) -> dict[str, str]:
+    """Refresh materialized views for KPI calculations."""
+    await service.refresh_materialized_views(user.user_id)
+    return {"status": "success", "message": "Materialized views refreshed"}
+
+
 @router.get("/insights", response_model=dict[str, Any], summary="Get comprehensive spending insights")
 async def get_insights(
     start_date: str | None = Query(None, description="Start date in YYYY-MM-DD format"),

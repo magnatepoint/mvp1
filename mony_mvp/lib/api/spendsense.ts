@@ -154,3 +154,10 @@ export async function fetchSubcategories(
     : '/v1/spendsense/subcategories'
   return fetchWithAuth<Subcategory[]>(session, endpoint)
 }
+
+// Refresh KPI materialized views
+export async function refreshKPIs(session: Session): Promise<void> {
+  await fetchWithAuth(session, '/v1/spendsense/kpis/refresh', {
+    method: 'POST',
+  })
+}

@@ -1488,6 +1488,17 @@ class SpendSenseService:
         
         return enriched_count
 
+    async def refresh_materialized_views(self, user_id: str) -> None:
+        """Refresh materialized views for KPI calculations."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                REFRESH MATERIALIZED VIEW CONCURRENTLY spendsense.mv_spendsense_dashboard_user_month;
+                REFRESH MATERIALIZED VIEW CONCURRENTLY spendsense.mv_spendsense_dashboard_user_month_category;
+                """
+            )
+            logger.info(f"Refreshed materialized views for user {user_id}")
+
     async def get_available_months(self, user_id: str) -> list[str]:
         """Get list of available months with transaction data in YYYY-MM format."""
         rows = await self._pool.fetch(
