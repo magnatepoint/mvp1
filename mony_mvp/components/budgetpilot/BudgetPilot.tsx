@@ -9,6 +9,7 @@ import {
   fetchBudgetVariance,
 } from '@/lib/api/budget'
 import type { BudgetRecommendation, CommittedBudget, BudgetCommitRequest, BudgetVariance } from '@/types/budget'
+import { glassCardPrimary } from '@/lib/theme/glass'
 import BudgetPilotWelcomeBanner from './BudgetPilotWelcomeBanner'
 import EnhancedCommittedBudgetCard from './components/EnhancedCommittedBudgetCard'
 import EnhancedBudgetRecommendationCard from './components/EnhancedBudgetRecommendationCard'
