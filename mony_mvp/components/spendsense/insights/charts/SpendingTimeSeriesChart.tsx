@@ -13,13 +13,18 @@ export default function SpendingTimeSeriesChart({ data, incomeData }: SpendingTi
   const formatCurrency = (value: number | string | readonly (string | number)[] | undefined) => {
     if (value === undefined || value === null) return '₹0'
     
-    // Handle arrays - take the first value or sum them
+    // Handle arrays - take the first value
     let numValue: number
     if (Array.isArray(value)) {
       if (value.length === 0) return '₹0'
-      numValue = typeof value[0] === 'string' ? parseFloat(value[0]) : value[0]
+      const firstValue = value[0]
+      numValue = typeof firstValue === 'string' ? parseFloat(firstValue) : (typeof firstValue === 'number' ? firstValue : 0)
+    } else if (typeof value === 'string') {
+      numValue = parseFloat(value)
+    } else if (typeof value === 'number') {
+      numValue = value
     } else {
-      numValue = typeof value === 'string' ? parseFloat(value) : value
+      return '₹0'
     }
     
     if (isNaN(numValue)) return '₹0'
