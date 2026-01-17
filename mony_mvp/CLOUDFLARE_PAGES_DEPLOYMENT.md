@@ -27,6 +27,11 @@ This guide explains how to deploy the Monytix Next.js frontend to Cloudflare Pag
 
 **Production branch**: `main`
 
+**Root directory** (if your Next.js app is in a subdirectory):
+```
+mony_mvp
+```
+
 **Build command**:
 ```bash
 npm run build
@@ -37,14 +42,26 @@ npm run build
 .next
 ```
 
-**Root directory** (if your Next.js app is in a subdirectory):
-```
-mony_mvp
-```
+**Important**: If you set the root directory to `mony_mvp`, make sure the build command runs from that directory. The build output will be in `mony_mvp/.next`.
 
 **Node.js version**: `20` (or latest LTS)
 
-### 3. Set Environment Variables
+### 3. Configure Compatibility Flags
+
+**IMPORTANT**: Cloudflare Pages requires the `nodejs_compat` compatibility flag for Next.js applications.
+
+1. Go to your Cloudflare Pages project
+2. Navigate to **Settings** → **Functions** → **Compatibility Flags**
+3. Add the following compatibility flag:
+   - **Flag name**: `nodejs_compat`
+4. Enable it for both:
+   - **Production environment**
+   - **Preview environment**
+5. Click **Save**
+
+**Why this is needed**: Next.js on Cloudflare Pages uses `@cloudflare/next-on-pages` which requires Node.js compatibility to run server-side code.
+
+### 4. Set Environment Variables
 
 In the Cloudflare Pages project settings, go to **Settings** → **Environment variables** and add:
 
@@ -64,12 +81,12 @@ NODE_ENV=production
 - All `NEXT_PUBLIC_*` variables are embedded at **build time**
 - You can also set these for Preview deployments if needed
 
-### 4. Framework Preset
+### 5. Framework Preset
 
 Cloudflare Pages will automatically detect Next.js, but you can explicitly set:
 - **Framework preset**: `Next.js`
 
-### 5. Deploy
+### 6. Deploy
 
 1. Click **Save and Deploy**
 2. Cloudflare Pages will:
@@ -80,7 +97,7 @@ Cloudflare Pages will automatically detect Next.js, but you can explicitly set:
 3. Monitor the build logs in real-time
 4. Once deployed, your app will be available at: `https://your-project-name.pages.dev`
 
-### 6. Custom Domain (Optional)
+### 7. Custom Domain (Optional)
 
 1. Go to **Custom domains** in your Pages project
 2. Click **Set up a custom domain**
@@ -140,6 +157,21 @@ Preview deployments use the same environment variables as production by default.
 - Use preview URLs for testing before merging to main
 
 ## Troubleshooting
+
+### Node.js Compatibility Error
+
+**Error**: "Node.JS Compatibility Error - no nodejs_compat compatibility flag set"
+
+**Solution**:
+1. Go to your Cloudflare Pages project dashboard
+2. Navigate to **Settings** → **Functions** → **Compatibility Flags**
+3. Click **Add compatibility flag**
+4. Enter: `nodejs_compat`
+5. Enable it for both **Production** and **Preview** environments
+6. Click **Save**
+7. Redeploy your application
+
+This flag is required for Next.js applications using `@cloudflare/next-on-pages` to enable Node.js compatibility in Cloudflare Workers.
 
 ### Build Fails
 
