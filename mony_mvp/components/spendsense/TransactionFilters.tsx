@@ -145,7 +145,7 @@ export default function TransactionFilters({
     return 'Date'
   }
 
-  const channels = ['UPI', 'NEFT', 'IMPS', 'Card', 'ATM', 'ACH', 'NACH', 'Other']
+  const channels = ['Cash', 'UPI', 'NEFT', 'IMPS', 'Card', 'ATM', 'ACH', 'NACH', 'Other']
 
   return (
     <>

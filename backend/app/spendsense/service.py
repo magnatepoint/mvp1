@@ -771,7 +771,7 @@ class SpendSenseService:
                         ))
                     WHEN v.description ~* '^ACH\\s+([^-/]+)' THEN
                         INITCAP(REGEXP_REPLACE(
-                            (regexp_match(v.description, '^ACH\s+([^-/]+)'))[1],
+                            (regexp_match(v.description, '^ACH\\s+([^-/]+)'))[1],
                             '\\s+', ' ', 'g'
                         ))
                     -- For simple descriptions, use the description itself (limited length)
@@ -779,7 +779,7 @@ class SpendSenseService:
                          AND LENGTH(TRIM(v.description)) > 0 
                          AND LENGTH(TRIM(v.description)) <= 50
                          AND LOWER(TRIM(v.description)) NOT IN ('test transaction - today', 'salary', 'payment', 'transfer', 'debit', 'credit')
-                         AND v.description !~* '^\d+$'
+                         AND v.description !~* '^\\d+$'
                     THEN INITCAP(REGEXP_REPLACE(TRIM(v.description), '\\s+', ' ', 'g'))
                     -- Fallback to bank name if description is empty
                     WHEN v.bank_code IS NOT NULL THEN
@@ -1095,7 +1095,7 @@ class SpendSenseService:
                         ))
                     WHEN v.description ~* '^ACH\\s+([^-/]+)' THEN
                         INITCAP(REGEXP_REPLACE(
-                            (regexp_match(v.description, '^ACH\s+([^-/]+)'))[1],
+                            (regexp_match(v.description, '^ACH\\s+([^-/]+)'))[1],
                             '\\s+', ' ', 'g'
                         ))
                     -- For simple descriptions, use the description itself (limited length)
@@ -1103,7 +1103,7 @@ class SpendSenseService:
                          AND LENGTH(TRIM(v.description)) > 0 
                          AND LENGTH(TRIM(v.description)) <= 50
                          AND LOWER(TRIM(v.description)) NOT IN ('test transaction - today', 'salary', 'payment', 'transfer', 'debit', 'credit')
-                         AND v.description !~* '^\d+$'
+                         AND v.description !~* '^\\d+$'
                     THEN INITCAP(REGEXP_REPLACE(TRIM(v.description), '\\s+', ' ', 'g'))
                     -- Fallback to bank name if description is empty
                     WHEN v.bank_code IS NOT NULL THEN
@@ -1156,10 +1156,11 @@ class SpendSenseService:
             raise ValueError("amount must be positive")
         
         # Create upload batch for manual transaction
+        # status must be one of: received, parsed, failed, loaded (per upload_batch CHECK)
         batch_row = await self._pool.fetchrow(
             """
             INSERT INTO spendsense.upload_batch (user_id, source_type, status)
-            VALUES ($1, $2, 'completed')
+            VALUES ($1, $2, 'loaded')
             RETURNING upload_id
             """,
             user_id,
@@ -1322,6 +1323,34 @@ class SpendSenseService:
             }
             for row in rows
         ]
+
+    async def get_channels(self, user_id: str) -> list[str]:
+        """Get distinct channel values for the user (from DB) plus standard options (cash, upi, etc.)."""
+        # Standard options always shown for manual entry and filters
+        standard = ["cash", "upi", "neft", "imps", "card", "atm", "ach", "nach", "other"]
+        try:
+            rows = await self._pool.fetch(
+                """
+                SELECT DISTINCT LOWER(TRIM(v.channel)) AS channel
+                FROM spendsense.vw_txn_effective v
+                WHERE v.user_id = $1 AND v.channel IS NOT NULL AND TRIM(v.channel) <> ''
+                ORDER BY 1
+                """,
+                user_id,
+            )
+            from_db = [str(r["channel"]) for r in rows if r.get("channel")]
+            # Merge: standard first (in order), then any from DB not in standard
+            seen = set(s.lower() for s in standard)
+            ordered = [c for c in standard if c]
+            for c in from_db:
+                c_lower = c.lower()
+                if c_lower not in seen:
+                    seen.add(c_lower)
+                    ordered.append(c_lower)
+            return ordered
+        except Exception as e:
+            logger.warning("get_channels failed, using standard list: %s", e)
+            return standard
 
     async def get_subcategories(
         self, category_code: str | None = None, user_id: str | None = None

@@ -155,6 +155,11 @@ export async function fetchSubcategories(
   return fetchWithAuth<Subcategory[]>(session, endpoint)
 }
 
+// Fetch channel options (from backend: distinct from user's txns + standard list)
+export async function fetchChannels(session: Session): Promise<string[]> {
+  return fetchWithAuth<string[]>(session, '/v1/spendsense/channels')
+}
+
 // Refresh KPI materialized views
 export async function refreshKPIs(session: Session): Promise<void> {
   await fetchWithAuth(session, '/v1/spendsense/kpis/refresh', {

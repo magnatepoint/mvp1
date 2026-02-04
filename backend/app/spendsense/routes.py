@@ -344,6 +344,19 @@ async def get_subcategories(
     return await service.get_subcategories(category_code, user_id=user.user_id)
 
 
+@router.get(
+    "/channels",
+    summary="Get transaction channel options",
+    response_model=list[str],
+)
+async def get_channels(
+    user: AuthenticatedUser = Depends(get_current_user),
+    service: SpendSenseService = Depends(get_service),
+) -> list[str]:
+    """Get channel options: distinct values from user's transactions plus standard list (cash, upi, neft, etc.)."""
+    return await service.get_channels(user.user_id)
+
+
 @router.post(
     "/categories",
     summary="Create custom category",

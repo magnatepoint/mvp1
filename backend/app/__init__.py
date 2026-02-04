@@ -2,5 +2,8 @@
 
 from .main import app
 
-__all__ = ["app"]
+# Alias so "uvicorn app:main" works (correct form is "uvicorn app.main:app" or "uvicorn app:app")
+main = app
+
+__all__ = ["app", "main"]
 

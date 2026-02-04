@@ -26,7 +26,7 @@ if (isWrongHostname) {
   console.warn('[API] Fix in Cloudflare Pages → Settings → Environment Variables')
 }
 
-const REQUEST_TIMEOUT = 10000 // 10 seconds
+const REQUEST_TIMEOUT = 20000 // 20 seconds (create-transaction can be slow)
 
 export async function fetchWithAuth<T>(
   session: Session,

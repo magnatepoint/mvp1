@@ -272,6 +272,7 @@ export default function TransactionEditModal({
               className={`w-full ${glassFilter} px-4 py-3 rounded-lg text-foreground disabled:opacity-50`}
             >
               <option key="channel-empty" value="">Select channel</option>
+              <option key="channel-cash" value="cash">Cash</option>
               <option key="channel-upi" value="upi">UPI</option>
               <option key="channel-neft" value="neft">NEFT</option>
               <option key="channel-imps" value="imps">IMPS</option>

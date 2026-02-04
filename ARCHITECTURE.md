@@ -34,8 +34,8 @@ Monytix is a personal finance management platform that helps users track spendin
 ┌─────────────────────────────────────────────────────────────────┐
 │                         User Layer                               │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   Web App    │  │  Mobile Web  │  │   Desktop    │          │
-│  │ (Next.js PWA)│  │   (PWA)      │  │   Browser    │          │
+│  │   Web App    │  │  Mobile (ios/│  │   Desktop    │          │
+│  │ (Next.js PWA)│  │   android)   │  │   Browser    │          │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
 └─────────┼──────────────────┼──────────────────┼────────────────┘
           │                  │                  │
@@ -68,11 +68,11 @@ Monytix is a personal finance management platform that helps users track spendin
 │                      Backend Layer (Coolify/Docker)              │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              FastAPI Application                         │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐│   │
-│  │  │SpendSense│  │Goals     │  │Budget    │  │Gmail     ││   │
-│  │  │Routes    │  │Routes    │  │Routes    │  │Routes    ││   │
-│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘│   │
-│  └───────┼──────────────┼──────────────┼─────────────┼───────┘   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐│ │
+│  │  │SpendSense│  │Goals     │  │Budget    │  │Gmail     ││ │
+│  │  │Routes    │  │Routes    │  │Routes    │  │Routes    ││ │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘│ │
+│  └───────┼──────────────┼──────────────┼─────────────┼──────┘   │
 │          │              │              │             │           │
 │          ▼              ▼              ▼             ▼           │
 │  ┌──────────────────────────────────────────────────────┐      │

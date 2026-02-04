@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { createTransaction } from '@/lib/api/spendsense'
-import { fetchCategories, fetchSubcategories } from '@/lib/api/spendsense'
+import { createTransaction, fetchCategories, fetchSubcategories, fetchChannels } from '@/lib/api/spendsense'
 import type { Category, Subcategory, TransactionCreate } from '@/types/spendsense'
 import { glassCardPrimary, glassFilter } from '@/lib/theme/glass'
 
@@ -33,12 +32,17 @@ export default function ManualTransactionModal({
   })
   const [categories, setCategories] = useState<Category[]>([])
   const [subcategories, setSubcategories] = useState<Subcategory[]>([])
+  const [channels, setChannels] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Fallback if channels API fails or returns empty
+  const channelOptions = channels.length > 0 ? channels : ['cash', 'upi', 'neft', 'imps', 'card', 'atm', 'ach', 'nach', 'other']
 
   useEffect(() => {
     if (isOpen) {
       loadCategories()
+      loadChannels()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -68,6 +72,16 @@ export default function ManualTransactionModal({
       setSubcategories(subs)
     } catch (err) {
       console.error('Failed to load subcategories:', err)
+    }
+  }
+
+  const loadChannels = async () => {
+    try {
+      const list = await fetchChannels(session)
+      setChannels(Array.isArray(list) ? list : [])
+    } catch (err) {
+      console.error('Failed to load channels:', err)
+      setChannels([])
     }
   }
 
@@ -114,7 +128,14 @@ export default function ManualTransactionModal({
         account_ref: null,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create transaction')
+      const message = err instanceof Error ? err.message : 'Failed to create transaction'
+      // Make network errors more helpful
+      const isNetworkError = err instanceof Error && (err as any).isNetworkError
+      setError(
+        isNetworkError && message.includes('Unable to reach')
+          ? `${message} If you're running locally, ensure the backend is running and NEXT_PUBLIC_API_URL points to it (e.g. http://localhost:8000).`
+          : message
+      )
     } finally {
       setLoading(false)
     }
@@ -259,7 +280,7 @@ export default function ManualTransactionModal({
             </div>
           )}
 
-          {/* Channel */}
+          {/* Channel (fetched from backend: distinct from DB + standard list) */}
           <div>
             <label className="block text-sm font-medium mb-2">Channel (optional)</label>
             <select
@@ -269,14 +290,11 @@ export default function ManualTransactionModal({
               className={`w-full ${glassFilter} px-4 py-3 rounded-lg text-foreground disabled:opacity-50`}
             >
               <option value="">Select channel</option>
-              <option value="upi">UPI</option>
-              <option value="neft">NEFT</option>
-              <option value="imps">IMPS</option>
-              <option value="card">Card</option>
-              <option value="atm">ATM</option>
-              <option value="ach">ACH</option>
-              <option value="nach">NACH</option>
-              <option value="other">Other</option>
+              {channelOptions.map((code) => (
+                <option key={code} value={code}>
+                  {code.charAt(0).toUpperCase() + code.slice(1)}
+                </option>
+              ))}
             </select>
           </div>
 
