@@ -176,7 +176,34 @@ async def _ingest(
             norm AS (
                 SELECT
                     s.*,
-                    LOWER(COALESCE(TRIM(s.merchant_raw), '')) AS m_norm,
+                    -- Clean and normalize merchant name: remove transaction IDs, bank codes, UPI prefixes, etc.
+                    -- Use multiple REGEXP_REPLACE calls for better control and PostgreSQL compatibility
+                    LOWER(TRIM(REGEXP_REPLACE(
+                        REGEXP_REPLACE(
+                            REGEXP_REPLACE(
+                                REGEXP_REPLACE(
+                                    REGEXP_REPLACE(
+                                        REGEXP_REPLACE(
+                                            COALESCE(TRIM(s.merchant_raw), ''),
+                                            -- Remove UPI/IMPS/NEFT/RTGS/ACH prefixes (case-insensitive)
+                                            '^[Uu][Pp][Ii][-/]?|^[Ii][Mm][Pp][Ss][-/]?|^[Nn][Ee][Ff][Tt][-/]?|^[Rr][Tt][Gg][Ss][-/]?|^[Aa][Cc][Hh][-/]?', '', 'g'
+                                        ),
+                                        -- Remove bank codes like UTIB0000100-, CNRB0006026-, BK0007453-, etc. (case-insensitive)
+                                        '^[A-Za-z]{2,4}[0-9]{6,}[-/]?', '', 'g'
+                                    ),
+                                    -- Remove transaction IDs (10+ digit numbers)
+                                    '[0-9]{10,}', '', 'g'
+                                ),
+                                -- Remove common prefixes (case-insensitive, using ~* pattern matching)
+                                -- This will be done in a separate step for better control
+                                '^(to[[:space:]]+transfer[-/]?|payment[[:space:]]+from|request[[:space:]]+from|pay[[:space:]]+to|from[[:space:]]+phone|tfromphone)', '', 'gi'
+                            ),
+                            -- Remove bank code prefixes (more patterns)
+                            '^(pregeneratedqr[0-9]+|bk[0-9]+[-/]?|nrb[-/]?|ici[-/]?|ib[0-9]+[-/]?|s[-/]?|pl[-/]?|is[-/]?|xis[-/]?|i[-/]?|mu[-/]?|tib[0-9]+[-/]?|ucba[0-9]+[-/]?|cnrb[0-9]+[-/]?|fdrl[0-9]+[-/]?|utib[0-9]+[-/]?|kkbk[0-9]+[-/]?)[[:space:]]*', '', 'gi'
+                        ),
+                        -- Collapse multiple spaces, dashes, slashes into single space
+                        '[[:space:]\-/]+', ' ', 'g'
+                    ))) AS m_norm,
                     md5(LOWER(COALESCE(TRIM(s.merchant_raw), ''))) AS m_hash
                 FROM s
             ),
@@ -199,12 +226,14 @@ async def _ingest(
                         a.alias_merchant_id,
                         dm.merchant_id
                     ) AS merchant_id,
+                    -- Store normalized_name as lowercase for consistent matching with merchant_rules
+                    -- Display name can be derived from dim_merchant.merchant_name or INITCAP(normalized_name)
                     COALESCE(
                         a.alias_merchant_name,
                         dm.normalized_name,
                         CASE 
                             WHEN NULLIF(a.m_norm, '') IS NOT NULL 
-                            THEN INITCAP(REGEXP_REPLACE(a.m_norm, '\\s+', ' ', 'g'))
+                            THEN LOWER(REGEXP_REPLACE(a.m_norm, '\\s+', ' ', 'g'))
                             ELSE NULL
                         END
                     ) AS normalized_name,
@@ -215,7 +244,7 @@ async def _ingest(
                         a.alias_merchant_name,
                         CASE 
                             WHEN NULLIF(a.m_norm, '') IS NOT NULL 
-                            THEN INITCAP(REGEXP_REPLACE(a.m_norm, '\\s+', ' ', 'g'))
+                            THEN LOWER(REGEXP_REPLACE(a.m_norm, '\\s+', ' ', 'g'))
                             ELSE NULL
                         END
                     )

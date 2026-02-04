@@ -126,7 +126,7 @@ async def enrich_transactions(
                 mr.confidence,
                 'exact'::TEXT AS match_kind
             FROM candidates c
-            JOIN spendsense.merchant_rules mr ON mr.merchant_name_norm = c.merchant_for_matching
+            JOIN spendsense.merchant_rules mr ON LOWER(TRIM(COALESCE(mr.merchant_name_norm, ''))) = c.merchant_for_matching
             WHERE mr.active = TRUE
               AND NOT EXISTS (SELECT 1 FROM regex_rules er WHERE er.txn_id = c.txn_id)
             ORDER BY c.txn_id, mr.priority DESC, mr.confidence DESC
@@ -144,18 +144,18 @@ async def enrich_transactions(
                 'exact_dim'::TEXT AS match_kind
             FROM candidates c
             JOIN spendsense.dim_merchant dm ON (
-                dm.normalized_name = c.merchant_for_matching
-                OR c.merchant_for_matching LIKE '%' || dm.normalized_name || '%'
-                OR dm.normalized_name LIKE '%' || c.merchant_for_matching || '%'
-                OR similarity(dm.normalized_name, c.merchant_for_matching) >= 0.70
+                LOWER(TRIM(COALESCE(dm.normalized_name, ''))) = c.merchant_for_matching
+                OR c.merchant_for_matching LIKE '%' || LOWER(TRIM(COALESCE(dm.normalized_name, ''))) || '%'
+                OR LOWER(TRIM(COALESCE(dm.normalized_name, ''))) LIKE '%' || c.merchant_for_matching || '%'
+                OR similarity(LOWER(TRIM(COALESCE(dm.normalized_name, ''))), c.merchant_for_matching) >= 0.70
             )
             WHERE dm.active = TRUE
               AND NOT EXISTS (SELECT 1 FROM regex_rules er WHERE er.txn_id = c.txn_id)
               AND NOT EXISTS (SELECT 1 FROM exact_rules er WHERE er.txn_id = c.txn_id)
             ORDER BY c.txn_id, 
                 CASE 
-                    WHEN dm.normalized_name = c.merchant_for_matching THEN 1
-                    WHEN similarity(dm.normalized_name, c.merchant_for_matching) >= 0.80 THEN 2
+                    WHEN LOWER(TRIM(COALESCE(dm.normalized_name, ''))) = c.merchant_for_matching THEN 1
+                    WHEN similarity(LOWER(TRIM(COALESCE(dm.normalized_name, ''))), c.merchant_for_matching) >= 0.80 THEN 2
                     ELSE 3
                 END
         ),
@@ -180,10 +180,10 @@ async def enrich_transactions(
             FROM candidates c
             JOIN spendsense.merchant_rules mr ON (
                 mr.active = TRUE
-                AND similarity(mr.merchant_name_norm, c.merchant_for_matching) >= 0.40
+                AND similarity(LOWER(TRIM(COALESCE(mr.merchant_name_norm, ''))), c.merchant_for_matching) >= 0.40
             )
             WHERE NOT EXISTS (SELECT 1 FROM exact_matches em WHERE em.txn_id = c.txn_id)
-            ORDER BY c.txn_id, similarity(mr.merchant_name_norm, c.merchant_for_matching) DESC, mr.priority DESC
+            ORDER BY c.txn_id, similarity(LOWER(TRIM(COALESCE(mr.merchant_name_norm, ''))), c.merchant_for_matching) DESC, mr.priority DESC
         ),
         keyword_matches AS (
             SELECT DISTINCT ON (c.txn_id)
@@ -314,6 +314,8 @@ async def enrich_transactions(
     FROM resolved r
     WHERE r.parsed_id IS NOT NULL
         AND r.is_matched = TRUE  -- Only insert matched transactions (unmatched handled in Python)
+        AND r.category_code IS NOT NULL  -- Ensure category_code is never NULL
+        AND r.subcategory_code IS NOT NULL  -- Ensure subcategory_code is never NULL
     ON CONFLICT (parsed_id) DO NOTHING
     RETURNING parsed_id
     """
@@ -388,7 +390,7 @@ async def enrich_transactions(
                 mr.confidence,
                 'exact'::TEXT AS match_kind
             FROM candidates c
-            JOIN spendsense.merchant_rules mr ON mr.merchant_name_norm = c.merchant_for_matching
+            JOIN spendsense.merchant_rules mr ON LOWER(TRIM(COALESCE(mr.merchant_name_norm, ''))) = c.merchant_for_matching
             WHERE mr.active = TRUE
               AND NOT EXISTS (SELECT 1 FROM regex_rules er WHERE er.txn_id = c.txn_id)
             ORDER BY c.txn_id, mr.priority DESC, mr.confidence DESC
@@ -406,18 +408,18 @@ async def enrich_transactions(
                 'exact_dim'::TEXT AS match_kind
             FROM candidates c
             JOIN spendsense.dim_merchant dm ON (
-                dm.normalized_name = c.merchant_for_matching
-                OR c.merchant_for_matching LIKE '%' || dm.normalized_name || '%'
-                OR dm.normalized_name LIKE '%' || c.merchant_for_matching || '%'
-                OR similarity(dm.normalized_name, c.merchant_for_matching) >= 0.70
+                LOWER(TRIM(COALESCE(dm.normalized_name, ''))) = c.merchant_for_matching
+                OR c.merchant_for_matching LIKE '%' || LOWER(TRIM(COALESCE(dm.normalized_name, ''))) || '%'
+                OR LOWER(TRIM(COALESCE(dm.normalized_name, ''))) LIKE '%' || c.merchant_for_matching || '%'
+                OR similarity(LOWER(TRIM(COALESCE(dm.normalized_name, ''))), c.merchant_for_matching) >= 0.70
             )
             WHERE dm.active = TRUE
               AND NOT EXISTS (SELECT 1 FROM regex_rules er WHERE er.txn_id = c.txn_id)
               AND NOT EXISTS (SELECT 1 FROM exact_rules er WHERE er.txn_id = c.txn_id)
             ORDER BY c.txn_id, 
                 CASE 
-                    WHEN dm.normalized_name = c.merchant_for_matching THEN 1
-                    WHEN similarity(dm.normalized_name, c.merchant_for_matching) >= 0.80 THEN 2
+                    WHEN LOWER(TRIM(COALESCE(dm.normalized_name, ''))) = c.merchant_for_matching THEN 1
+                    WHEN similarity(LOWER(TRIM(COALESCE(dm.normalized_name, ''))), c.merchant_for_matching) >= 0.80 THEN 2
                     ELSE 3
                 END
         ),
@@ -442,10 +444,10 @@ async def enrich_transactions(
             FROM candidates c
             JOIN spendsense.merchant_rules mr ON (
                 mr.active = TRUE
-                AND similarity(mr.merchant_name_norm, c.merchant_for_matching) >= 0.40
+                AND similarity(LOWER(TRIM(COALESCE(mr.merchant_name_norm, ''))), c.merchant_for_matching) >= 0.40
             )
             WHERE NOT EXISTS (SELECT 1 FROM exact_matches em WHERE em.txn_id = c.txn_id)
-            ORDER BY c.txn_id, similarity(mr.merchant_name_norm, c.merchant_for_matching) DESC, mr.priority DESC
+            ORDER BY c.txn_id, similarity(LOWER(TRIM(COALESCE(mr.merchant_name_norm, ''))), c.merchant_for_matching) DESC, mr.priority DESC
         ),
         keyword_matches AS (
             SELECT DISTINCT ON (c.txn_id)
@@ -576,6 +578,8 @@ async def enrich_transactions(
     FROM resolved r
     WHERE r.parsed_id IS NOT NULL
         AND r.is_matched = TRUE  -- Only insert matched transactions (unmatched handled in Python)
+        AND r.category_code IS NOT NULL  -- Ensure category_code is never NULL
+        AND r.subcategory_code IS NOT NULL  -- Ensure subcategory_code is never NULL
     ON CONFLICT (parsed_id) DO NOTHING
     RETURNING parsed_id
     """
@@ -755,6 +759,17 @@ async def enrich_transactions(
         unmatched_rows = await conn.fetch(unmatched_query, *unmatched_params)
         inferred_count = 0
         
+        # Pre-fetch default subcategories for all categories (to avoid per-transaction queries)
+        default_subcategories = {}
+        default_subcat_rows = await conn.fetch("""
+            SELECT DISTINCT ON (category_code) category_code, subcategory_code
+            FROM spendsense.dim_subcategory
+            WHERE active = TRUE
+            ORDER BY category_code, display_order ASC
+        """)
+        for row in default_subcat_rows:
+            default_subcategories[row['category_code']] = row['subcategory_code']
+        
         # Process unmatched transactions with Python inference
         for row in unmatched_rows:
             parsed_id = row['parsed_id']
@@ -878,7 +893,27 @@ async def enrich_transactions(
                 else:
                     subcategory_code = 'pet_food'  # Default pets subcategory
             else:
-                subcategory_code = None
+                # Fallback: use cached default subcategory for this category, or None if not found
+                subcategory_code = default_subcategories.get(category_code)
+            
+            # Ensure category_code is never None (shouldn't happen, but safety check)
+            if not category_code:
+                logger.warning(f"[ENRICH WARNING] category_code is None for parsed_id {parsed_id}, using 'shopping' as fallback")
+                category_code = 'shopping'
+                subcategory_code = subcategory_code or 'shop_marketplaces'
+                confidence = 0.5  # Low confidence for fallback
+            
+            # Ensure subcategory_code is set if category_code exists
+            if category_code and not subcategory_code:
+                # Try to get default subcategory from cache
+                subcategory_code = default_subcategories.get(category_code)
+                if not subcategory_code:
+                    logger.warning(f"[ENRICH WARNING] No subcategory found for category {category_code}, parsed_id {parsed_id}")
+                    # Use a generic fallback based on category
+                    if category_code in ['transfers_out', 'transfers_in']:
+                        subcategory_code = 'tr_out_other' if category_code == 'transfers_out' else 'tr_in_other'
+                    else:
+                        subcategory_code = 'shop_marketplaces'  # Generic fallback
             
             # Get txn_type from category
             txn_type_row = await conn.fetchrow(
@@ -886,6 +921,14 @@ async def enrich_transactions(
                 category_code
             )
             txn_type = txn_type_row['txn_type'] if txn_type_row else 'wants'
+            
+            # Final safety check: ensure we never insert NULL category/subcategory
+            if not category_code or not subcategory_code:
+                logger.error(
+                    f"[ENRICH ERROR] Cannot insert enrichment for parsed_id {parsed_id}: "
+                    f"category_code={category_code}, subcategory_code={subcategory_code}. Skipping."
+                )
+                continue  # Skip this transaction
             
             # Insert inferred enrichment
             try:

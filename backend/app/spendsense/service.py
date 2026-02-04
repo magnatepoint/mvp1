@@ -152,10 +152,35 @@ class SpendSenseService:
             
             latest_month = latest_month_row["latest_month"]
         
+        # First, verify we have transactions for this month
+        debug_count = await self._pool.fetchrow(
+            """
+            SELECT 
+                COUNT(*) as total_txns,
+                COUNT(CASE WHEN direction = 'credit' THEN 1 END) as credit_count,
+                COUNT(CASE WHEN direction = 'debit' THEN 1 END) as debit_count,
+                COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END), 0) as credit_sum,
+                COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount ELSE 0 END), 0) as debit_sum
+            FROM spendsense.txn_fact
+            WHERE user_id = $1
+              AND txn_date >= $2
+              AND txn_date < ($2 + INTERVAL '1 month')::date
+            """,
+            user_id,
+            latest_month,
+        )
+        if debug_count:
+            logger.info(
+                f"[KPI DEBUG] Month {latest_month}: total={debug_count['total_txns']}, "
+                f"credits={debug_count['credit_count']} (sum={debug_count['credit_sum']}), "
+                f"debits={debug_count['debit_count']} (sum={debug_count['debit_sum']})"
+            )
+        
         row = await self._pool.fetchrow(
             """
             WITH enriched AS (
                 SELECT
+                    f.txn_id,
                     f.txn_date,
                     f.amount,
                     f.direction,
@@ -194,10 +219,12 @@ class SpendSenseService:
             )
             SELECT
                 $2::date AS month,
+                -- Income: all credit transactions
                 COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END), 0) AS income_amount,
-                COALESCE(SUM(CASE WHEN txn_type = 'needs' THEN amount ELSE 0 END), 0) AS needs_amount,
-                COALESCE(SUM(CASE WHEN txn_type = 'wants' THEN amount ELSE 0 END), 0) AS wants_amount,
-                COALESCE(SUM(CASE WHEN txn_type = 'assets' THEN amount ELSE 0 END), 0) AS assets_amount
+                -- Needs/Wants/Assets: only debit transactions with specific txn_types
+                COALESCE(SUM(CASE WHEN txn_type = 'needs' AND direction = 'debit' THEN amount ELSE 0 END), 0) AS needs_amount,
+                COALESCE(SUM(CASE WHEN txn_type = 'wants' AND direction = 'debit' THEN amount ELSE 0 END), 0) AS wants_amount,
+                COALESCE(SUM(CASE WHEN txn_type = 'assets' AND direction = 'debit' THEN amount ELSE 0 END), 0) AS assets_amount
             FROM enriched
             """,
             user_id,
@@ -288,22 +315,31 @@ class SpendSenseService:
 
         wants_amount = float(row["wants_amount"] or 0) if row else 0.0
         needs_amount = float(row["needs_amount"] or 0) if row else 0.0
+        income_amount = float(row["income_amount"] or 0) if row else 0.0
+        assets_amount = float(row["assets_amount"] or 0) if row else 0.0
+        
+        # Log calculated KPIs for debugging
+        logger.info(
+            f"[KPI CALC] Month {month}: income={income_amount}, needs={needs_amount}, "
+            f"wants={wants_amount}, assets={assets_amount}, total_expenses={needs_amount + wants_amount}"
+        )
+        
         wants_gauge = self._build_wants_gauge(needs=needs_amount, wants=wants_amount)
 
         best_month = await self._fetch_best_month_from_fact(
             user_id=user_id,
             current_month=month,
-            current_net=(float(row["income_amount"] or 0) - wants_amount) if row else 0.0,
+            current_net=(income_amount - needs_amount - wants_amount) if row else 0.0,
         )
 
         loot_drop = await self._fetch_recent_loot_drop(user_id)
 
         return SpendSenseKPI(
             month=month,
-            income_amount=float(row["income_amount"] or 0) if row else 0.0,
+            income_amount=income_amount,
             needs_amount=needs_amount,
             wants_amount=wants_amount,
-            assets_amount=float(row["assets_amount"] or 0) if row else 0.0,
+            assets_amount=assets_amount,
             top_categories=top_categories,
             wants_gauge=wants_gauge,
             best_month=best_month,

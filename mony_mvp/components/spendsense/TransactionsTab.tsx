@@ -38,7 +38,7 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const PAGE_SIZE = 25
 
-  const loadTransactions = async () => {
+  const loadTransactions = async (append = false) => {
     setLoading(true)
     setError(null)
     try {
@@ -54,7 +54,12 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
         start_date: filters.start_date || undefined,
         end_date: filters.end_date || undefined,
       })
-      setTransactions(response.transactions)
+      // Append new transactions if loading more, otherwise replace
+      if (append && page > 1) {
+        setTransactions((prev) => [...prev, ...response.transactions])
+      } else {
+        setTransactions(response.transactions)
+      }
       setTotal(response.total)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load transactions')
@@ -66,10 +71,13 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
 
   useEffect(() => {
     setPage(1)
+    setTransactions([]) // Clear transactions when filters change
   }, [filters.category_code, filters.subcategory_code, filters.channel, filters.direction, filters.start_date, filters.end_date, searchText])
 
   useEffect(() => {
-    loadTransactions()
+    // If page is 1, replace transactions. If page > 1, append (load more)
+    const append = page > 1
+    loadTransactions(append)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.access_token, page, searchText, filters.category_code, filters.subcategory_code, filters.channel, filters.direction, filters.start_date, filters.end_date])
 
@@ -230,7 +238,12 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
         <div className="space-y-6">
           {Object.entries(groupedTransactions).map(([date, txns]) => (
             <div key={date}>
-              <h3 className="text-lg font-bold mb-3">{date}</h3>
+              <h3 className="text-lg font-bold mb-3">
+                {date}
+                <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                  ({txns.length} {txns.length === 1 ? 'transaction' : 'transactions'})
+                </span>
+              </h3>
               <div className="space-y-2">
                 {txns.map((txn) => (
                   <TransactionRow
@@ -244,13 +257,18 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
           ))}
 
           {/* Load More */}
-          {total > transactions.length && (
+          {total > transactions.length && !loading && (
             <button
               onClick={() => setPage(page + 1)}
               className={`w-full py-3 ${glassFilter} font-medium hover:bg-white/10 dark:hover:bg-white/10 transition-colors`}
             >
               Load More ({total - transactions.length} remaining)
             </button>
+          )}
+          {loading && transactions.length > 0 && (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-foreground"></div>
+            </div>
           )}
         </div>
       )}
