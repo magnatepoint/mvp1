@@ -648,6 +648,28 @@ def dataframe_to_records(df: pd.DataFrame, *, bank_code: str | None = None) -> l
         amount = float(row["amount"])
         description = str(row.get("description", "") or "")
         channel = detect_channel(description, row["direction"])
+        # Extract category_code from "Category Name (code)" format if present
+        category_value = row.get("category", "")
+        category_code = None
+        if category_value:
+            # Check if it's in "Name (code)" format
+            import re
+            match = re.search(r'\(([^)]+)\)$', str(category_value))
+            if match:
+                category_code = match.group(1)  # Extract code from parentheses
+            else:
+                category_code = str(category_value).strip()  # Use as-is if no parentheses
+        
+        # Extract subcategory_code from "Subcategory Name (code)" format if present
+        subcategory_value = row.get("subcategory", "")
+        subcategory_code = None
+        if subcategory_value:
+            match = re.search(r'\(([^)]+)\)$', str(subcategory_value))
+            if match:
+                subcategory_code = match.group(1)  # Extract code from parentheses
+            else:
+                subcategory_code = str(subcategory_value).strip()  # Use as-is if no parentheses
+        
         records.append(
             {
                 "txn_date": row["txn_date"],
@@ -656,8 +678,8 @@ def dataframe_to_records(df: pd.DataFrame, *, bank_code: str | None = None) -> l
                 "direction": row["direction"],
                 "currency": row["currency"],
                 "merchant_raw": row.get("merchant"),
-                "category_code": row.get("category"),  # From Excel "Category" column
-                "subcategory_code": row.get("subcategory"),  # From Excel "Subcategory" column
+                "category_code": category_code,
+                "subcategory_code": subcategory_code,
                 "account_ref": row.get("account_ref"),
                 "raw_txn_id": row.get("raw_txn_id"),
                 "bank_code": bank_code,

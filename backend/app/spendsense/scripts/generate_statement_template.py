@@ -125,24 +125,34 @@ def main() -> None:
     wb.remove(wb.active)  # Remove default sheet
     
     # Create helper sheets FIRST (before main data sheet)
-    # Category lookup sheet
+    # Category lookup sheet - store as "Category Name (category_code)" for user-friendly display
     cat_sheet = wb.create_sheet("_CategoryLookup")
-    cat_sheet.append(["category_code"])
-    category_codes = [cat[0] for cat in categories]
-    for cat_code in category_codes:
-        cat_sheet.append([cat_code])
+    cat_sheet.append(["category_display"])  # More user-friendly header
+    category_codes = []
+    for cat_code, cat_name in categories:
+        # Store as "Category Name (category_code)" so users see names but codes are parseable
+        display_value = f"{cat_name} ({cat_code})"
+        cat_sheet.append([display_value])
+        category_codes.append(cat_code)
     
-    # Subcategory lookup sheet
-    all_subcat_codes = []
+    # Subcategory lookup sheet - store as "Subcategory Name (subcategory_code)"
+    all_subcats = []
     for subcats in subcategories_by_category.values():
-        all_subcat_codes.extend([sub[0] for sub in subcats])
-    unique_subcat_codes = sorted(set(all_subcat_codes))
+        all_subcats.extend(subcats)
+    # Deduplicate by code while preserving name
+    unique_subcats_dict = {}
+    for sub_code, sub_name in all_subcats:
+        if sub_code not in unique_subcats_dict:
+            unique_subcats_dict[sub_code] = sub_name
     
-    if unique_subcat_codes:
+    if unique_subcats_dict:
         subcat_sheet = wb.create_sheet("_SubcategoryLookup")
-        subcat_sheet.append(["subcategory_code"])
+        subcat_sheet.append(["subcategory_display"])  # More user-friendly header
+        unique_subcat_codes = sorted(unique_subcats_dict.keys())
         for sub_code in unique_subcat_codes:
-            subcat_sheet.append([sub_code])
+            sub_name = unique_subcats_dict[sub_code]
+            display_value = f"{sub_name} ({sub_code})"
+            subcat_sheet.append([display_value])
     
     # Now create main sheets
     ws = wb.create_sheet("Transactions")
