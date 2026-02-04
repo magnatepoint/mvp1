@@ -119,91 +119,74 @@ def main() -> None:
     # Create DataFrame
     df = pd.DataFrame(SAMPLE_ROWS, columns=HEADERS)
 
-    # Write to Excel first
-    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="Transactions", index=False)
-        # Instructions sheet
-        inst_df = pd.DataFrame([line for line in INSTRUCTIONS.split("\n")], columns=["Instructions"])
-        inst_df.to_excel(writer, sheet_name="Instructions", index=False)
-
-    # Now add data validation dropdowns using openpyxl
-    wb = load_workbook(out_path)
-    ws = wb["Transactions"]
-
-    # Category column (column F, index 5)
+    # Create workbook with openpyxl directly to have better control
+    from openpyxl import Workbook
+    wb = Workbook()
+    wb.remove(wb.active)  # Remove default sheet
+    
+    # Create helper sheets FIRST (before main data sheet)
+    # Category lookup sheet
+    cat_sheet = wb.create_sheet("_CategoryLookup")
+    cat_sheet.append(["category_code"])
     category_codes = [cat[0] for cat in categories]
-    category_display = [f"{cat[0]} - {cat[1]}" for cat in categories]
-    category_formula = f'"{",".join(category_codes)}"'
-    
-    # Create a helper sheet for category lookup (hidden)
-    helper_sheet = wb.create_sheet("_CategoryLookup")
-    helper_sheet.append(["category_code"])
     for cat_code in category_codes:
-        helper_sheet.append([cat_code])
+        cat_sheet.append([cat_code])
     
-    # Category dropdown (column F)
+    # Subcategory lookup sheet
+    all_subcat_codes = []
+    for subcats in subcategories_by_category.values():
+        all_subcat_codes.extend([sub[0] for sub in subcats])
+    unique_subcat_codes = sorted(set(all_subcat_codes))
+    
+    if unique_subcat_codes:
+        subcat_sheet = wb.create_sheet("_SubcategoryLookup")
+        subcat_sheet.append(["subcategory_code"])
+        for sub_code in unique_subcat_codes:
+            subcat_sheet.append([sub_code])
+    
+    # Now create main sheets
+    ws = wb.create_sheet("Transactions")
+    
+    # Write headers
+    for col_idx, header in enumerate(HEADERS, start=1):
+        ws.cell(row=1, column=col_idx, value=header)
+    
+    # Write sample data
+    for row_idx, row_data in enumerate(SAMPLE_ROWS, start=2):
+        for col_idx, value in enumerate(row_data, start=1):
+            ws.cell(row=row_idx, column=col_idx, value=value)
+    
+    # Instructions sheet
+    inst_sheet = wb.create_sheet("Instructions")
+    for row_idx, line in enumerate(INSTRUCTIONS.split("\n"), start=1):
+        inst_sheet.cell(row=row_idx, column=1, value=line)
+
+    # Category dropdown (column F) - use helper sheet reference
+    category_formula = f'_CategoryLookup!$A$2:$A${len(category_codes) + 1}'
     category_dv = DataValidation(
         type="list",
-        formula1=f'_CategoryLookup!$A$2:$A${len(category_codes) + 1}',
+        formula1=category_formula,
         allow_blank=False,
         showErrorMessage=True,
         errorTitle="Invalid Category",
         error="Please select a category from the dropdown list.",
     )
-    category_dv.add(f"F2:F1048576")  # Apply to all rows (Excel max rows)
+    category_dv.add("F2:F1048576")  # Apply to all rows (Excel max rows)
     ws.add_data_validation(category_dv)
 
-    # Subcategory column (column G, index 6)
-    # We'll use INDIRECT to make it dynamic based on category
-    # First, create a named range for each category's subcategories
-    for cat_code, subcats in subcategories_by_category.items():
-        if not subcats:
-            continue
-        # Create a sheet for this category's subcategories
-        subcat_sheet_name = f"_Subcat_{cat_code[:20]}"  # Excel sheet name limit
-        if subcat_sheet_name in wb.sheetnames:
-            wb.remove(wb[subcat_sheet_name])
-        subcat_sheet = wb.create_sheet(subcat_sheet_name)
-        subcat_sheet.append(["subcategory_code"])
-        for sub_code, _ in subcats:
-            subcat_sheet.append([sub_code])
-        
-        # Create named range (Excel doesn't support dynamic INDIRECT easily, so we'll use a simpler approach)
-        # For now, we'll create a validation that allows all subcategories (user must pick valid one for category)
-    
-    # Create a combined subcategory lookup sheet
-    all_subcat_sheet = wb.create_sheet("_SubcategoryLookup")
-    all_subcat_sheet.append(["category_code", "subcategory_code"])
-    for cat_code, subcats in subcategories_by_category.items():
-        for sub_code, sub_name in subcats:
-            all_subcat_sheet.append([cat_code, sub_code])
-    
-    # Subcategory dropdown - simpler: allow all subcategories (validation happens on backend)
-    all_subcat_codes = []
-    for subcats in subcategories_by_category.values():
-        all_subcat_codes.extend([sub[0] for sub in subcats])
-    
-    if all_subcat_codes:
-        subcat_lookup_sheet = wb.create_sheet("_AllSubcats")
-        subcat_lookup_sheet.append(["subcategory_code"])
-        for sub_code in sorted(set(all_subcat_codes)):
-            subcat_lookup_sheet.append([sub_code])
-        
+    # Subcategory dropdown (column G)
+    if unique_subcat_codes:
+        subcategory_formula = f'_SubcategoryLookup!$A$2:$A${len(unique_subcat_codes) + 1}'
         subcategory_dv = DataValidation(
             type="list",
-            formula1=f'_AllSubcats!$A$2:$A${len(set(all_subcat_codes)) + 1}',
+            formula1=subcategory_formula,
             allow_blank=False,
             showErrorMessage=True,
             errorTitle="Invalid Subcategory",
             error="Please select a subcategory from the dropdown list.",
         )
-        subcategory_dv.add(f"G2:G1048576")
+        subcategory_dv.add("G2:G1048576")
         ws.add_data_validation(subcategory_dv)
-
-    # Hide helper sheets
-    for sheet_name in wb.sheetnames:
-        if sheet_name.startswith("_"):
-            wb[sheet_name].sheet_state = "hidden"
 
     # Direction dropdown (column C)
     direction_dv = DataValidation(
@@ -214,6 +197,11 @@ def main() -> None:
     direction_dv.add("C2:C1048576")
     ws.add_data_validation(direction_dv)
 
+    # Keep helper sheets visible (Excel sometimes has issues with hidden sheets in formulas)
+    # They're prefixed with "_" so they're less prominent but still accessible
+    # Users can hide them manually if desired
+
+    # Save with proper Excel format - ensure we're saving as xlsx
     wb.save(out_path)
     print(f"Generated: {out_path}")
 
