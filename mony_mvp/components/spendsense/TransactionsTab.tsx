@@ -159,7 +159,7 @@ export default function TransactionsTab({ session }: TransactionsTabProps) {
           <p className="text-sm">{error}</p>
         </div>
         <button
-          onClick={loadTransactions}
+          onClick={() => loadTransactions(false)}
           className="px-6 py-2 bg-foreground text-background rounded-lg font-medium hover:opacity-90 transition-opacity"
         >
           Retry
