@@ -111,6 +111,8 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "currency": ("currency", "curr", "ccy", "cur"),
     "merchant": ("merchant", "merchant_raw", "payee", "beneficiary", "to", "from"),
+    "category": ("category", "category_code", "cat", "category code"),
+    "subcategory": ("subcategory", "subcategory_code", "subcat", "subcategory code", "sub category"),
     "account_ref": (
         "account_ref",
         "account",
@@ -377,6 +379,8 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
         "direction",
         "currency",
         "merchant",
+        "category",
+        "subcategory",
         "account_ref",
         "raw_txn_id",
         "withdrawal_amt",
@@ -652,6 +656,8 @@ def dataframe_to_records(df: pd.DataFrame, *, bank_code: str | None = None) -> l
                 "direction": row["direction"],
                 "currency": row["currency"],
                 "merchant_raw": row.get("merchant"),
+                "category_code": row.get("category"),  # From Excel "Category" column
+                "subcategory_code": row.get("subcategory"),  # From Excel "Subcategory" column
                 "account_ref": row.get("account_ref"),
                 "raw_txn_id": row.get("raw_txn_id"),
                 "bank_code": bank_code,

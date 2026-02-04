@@ -98,6 +98,15 @@ export default function ManualTransactionModal({
       setError('Amount must be greater than 0')
       return
     }
+    if (!formData.category_code) {
+      setError('Category is required')
+      return
+    }
+    // Subcategory is required only if the category has subcategories available
+    if (formData.category_code && subcategories.length > 0 && !formData.subcategory_code) {
+      setError('Subcategory is required for this category')
+      return
+    }
     const selectedDate = new Date(formData.txn_date)
     const today = new Date()
     today.setHours(23, 59, 59, 999)
@@ -242,12 +251,13 @@ export default function ManualTransactionModal({
 
           {/* Category */}
           <div>
-            <label className="block text-sm font-medium mb-2">Category (optional)</label>
+            <label className="block text-sm font-medium mb-2">Category *</label>
             <select
               value={formData.category_code || ''}
               onChange={(e) =>
                 setFormData({ ...formData, category_code: e.target.value || null, subcategory_code: null })
               }
+              required
               disabled={loading}
               className={`w-full ${glassFilter} px-4 py-3 rounded-lg text-foreground disabled:opacity-50`}
             >
@@ -261,22 +271,33 @@ export default function ManualTransactionModal({
           </div>
 
           {/* Subcategory */}
-          {formData.category_code && subcategories.length > 0 && (
+          {formData.category_code && (
             <div>
-              <label className="block text-sm font-medium mb-2">Subcategory (optional)</label>
-              <select
-                value={formData.subcategory_code || ''}
-                onChange={(e) => setFormData({ ...formData, subcategory_code: e.target.value || null })}
-                disabled={loading}
-                className={`w-full ${glassFilter} px-4 py-3 rounded-lg text-foreground disabled:opacity-50`}
-              >
-                <option value="">Select subcategory</option>
-                {subcategories.map((sub) => (
-                  <option key={sub.subcategory_code} value={sub.subcategory_code}>
-                    {sub.subcategory_name}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm font-medium mb-2">
+                Subcategory {subcategories.length > 0 ? '*' : ''}
+              </label>
+              {subcategories.length > 0 ? (
+                <select
+                  value={formData.subcategory_code || ''}
+                  onChange={(e) => setFormData({ ...formData, subcategory_code: e.target.value || null })}
+                  required={subcategories.length > 0}
+                  disabled={loading}
+                  className={`w-full ${glassFilter} px-4 py-3 rounded-lg text-foreground disabled:opacity-50`}
+                >
+                  <option value="">Select subcategory</option>
+                  {subcategories.map((sub) => (
+                    <option key={sub.subcategory_code} value={sub.subcategory_code}>
+                      {sub.subcategory_name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <p className="text-sm text-yellow-400">
+                    No subcategories available for this category. Subcategory is optional.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
