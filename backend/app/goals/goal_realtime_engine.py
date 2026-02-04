@@ -220,25 +220,16 @@ class GoalRealtimeEngine:
                 else 0.0
             )
 
-            # Update drift fields
+            # Update drift fields (status remains unchanged - drift info is in drift_amount/drift_pct)
             goal_id = UUID(str(g["goal_id"]))
-            status = "active"
-            if drift_pct == 0:
-                status = "on_track"
-            elif drift_pct < 5:
-                status = "slightly_drifting"
-            elif drift_pct < 10:
-                status = "drifting"
-            else:
-                status = "at_risk"
-
             await self.goals_repo.update_goal(
                 user_id=user_id,
                 goal_id=goal_id,
                 updates={
                     "drift_amount": drift_amount,
                     "drift_pct": drift_pct,
-                    "status": status,
+                    # Note: status field only accepts: 'active', 'paused', 'completed', 'cancelled'
+                    # Drift status can be determined from drift_pct if needed
                 },
             )
 

@@ -95,12 +95,23 @@ async def re_enrich_user(user_id: str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    user_id = None
+    
+    # Support both --user=UUID and positional argument
+    for arg in sys.argv[1:]:
+        if arg.startswith('--user='):
+            user_id = arg.split('=', 1)[1]
+            break
+        elif not arg.startswith('--'):
+            user_id = arg
+            break
+    
+    if not user_id:
         print("Usage: python scripts/re_enrich_user.py <user_id>")
+        print("   or: python scripts/re_enrich_user.py --user=<user_id>")
         print("\nTo find your user_id, check your Supabase auth.users table or")
         print("look at the user_id in your transaction data.")
         sys.exit(1)
     
-    user_id = sys.argv[1]
     asyncio.run(re_enrich_user(user_id))
 
