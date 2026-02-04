@@ -171,6 +171,9 @@ def main() -> None:
     for row_idx, line in enumerate(INSTRUCTIONS.split("\n"), start=1):
         inst_sheet.cell(row=row_idx, column=1, value=line)
 
+    # Open on Transactions sheet so users see the main template first (not CategoryLookup)
+    wb.active = ws
+
     # Category dropdown (column F) - use helper sheet reference
     category_formula = f'_CategoryLookup!$A$2:$A${len(category_codes) + 1}'
     category_dv = DataValidation(
