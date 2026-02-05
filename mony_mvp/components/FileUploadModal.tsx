@@ -176,7 +176,7 @@ export default function FileUploadModal({
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2">Upload Statement</h2>
           <p className="text-sm text-gray-400 mb-2">
-            Upload PDF, XLS, XLSX, or CSV files to import transactions
+            PDF, Excel (XLS/XLSX), or CSV — works on phone and desktop
           </p>
           <a
             href="/Monytix_Statement_Template.xlsx"
@@ -203,11 +203,12 @@ export default function FileUploadModal({
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading || isCheckingPassword}
-            className={`w-full ${glassFilter} p-6 border-2 border-dashed border-white/20 rounded-lg hover:border-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+            className={`w-full ${glassFilter} p-6 border-2 border-dashed border-white/20 rounded-lg hover:border-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[120px] touch-manipulation`}
+            type="button"
           >
             <div className="flex flex-col items-center gap-3">
               <svg
-                className="w-12 h-12 text-gray-400"
+                className="w-12 h-12 text-gray-400 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -221,7 +222,7 @@ export default function FileUploadModal({
               </svg>
               <div className="text-center">
                 <p className="text-sm font-medium">
-                  {selectedFile ? selectedFile.name : 'Click to select file'}
+                  {selectedFile ? selectedFile.name : 'Tap or click to select file'}
                 </p>
                 {selectedFile && (
                   <p className="text-xs text-gray-500 mt-1">
