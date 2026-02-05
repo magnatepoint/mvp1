@@ -93,8 +93,10 @@ export function transformToOverviewSummary(
     return null
   }
 
-  const totalBalance = kpis.assets_amount || 0
-  const thisMonthSpending = (kpis.needs_amount || 0) + (kpis.wants_amount || 0)
+  // Net (income - all debits) for the month; avoid showing "balance" as assets spend
+  const totalDebits = kpis.total_debits_amount ?? (kpis.needs_amount || 0) + (kpis.wants_amount || 0)
+  const totalBalance = (kpis.income_amount || 0) - totalDebits
+  const thisMonthSpending = totalDebits
   const savingsRate = calculateSavingsRate(kpis)
   const activeGoalsCount = goals.filter((g) => g.is_active).length
 

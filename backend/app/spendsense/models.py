@@ -124,6 +124,7 @@ class SpendSenseKPI(BaseModel):
     needs_amount: float
     wants_amount: float
     assets_amount: float
+    total_debits_amount: float = 0.0  # All debits for the month (for "This Month" spending)
     top_categories: list[CategorySpendKPI]
     wants_gauge: WantsGauge | None = None
     best_month: BestMonthSnapshot | None = None

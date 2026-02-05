@@ -51,12 +51,13 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root user
 USER appuser
 
-# Expose port
+# Use PORT from env (e.g. Dokploy); default 8001
+ENV PORT=8001
 EXPOSE 8001
 
-# Health check
+# Health check (uses PORT so it works when Dokploy sets PORT)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+    CMD curl -f "http://localhost:${PORT}/health" || exit 1
 
-# Default command (can be overridden in docker-compose)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Default command; respect PORT for PaaS (Dokploy, etc.)
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

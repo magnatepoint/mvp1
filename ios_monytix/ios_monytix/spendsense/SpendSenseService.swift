@@ -11,10 +11,18 @@ import Supabase
 class SpendSenseService {
     private let authService: AuthService
     private let baseURL: String
+    private let urlSession: URLSession
     
     init(authService: AuthService) {
         self.authService = authService
         self.baseURL = Config.apiBaseUrl
+        
+        // Configure URLSession with shorter timeouts for faster failure
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 15.0  // 15 seconds instead of 60
+        configuration.timeoutIntervalForResource = 30.0  // 30 seconds for entire resource
+        configuration.waitsForConnectivity = false  // Fail fast if offline
+        self.urlSession = URLSession(configuration: configuration)
     }
     
     // MARK: - Helper Methods
@@ -49,7 +57,7 @@ class SpendSenseService {
         }
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw SpendSenseError.invalidResponse
@@ -195,7 +203,7 @@ class SpendSenseService {
         // Simulate progress
         onProgress(0.0)
         
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
+        let (data, response) = try await urlSession.upload(for: request, from: body)
         
         onProgress(1.0)
         

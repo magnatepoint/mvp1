@@ -224,7 +224,9 @@ class SpendSenseService:
                 -- Needs/Wants/Assets: only debit transactions with specific txn_types
                 COALESCE(SUM(CASE WHEN txn_type = 'needs' AND direction = 'debit' THEN amount ELSE 0 END), 0) AS needs_amount,
                 COALESCE(SUM(CASE WHEN txn_type = 'wants' AND direction = 'debit' THEN amount ELSE 0 END), 0) AS wants_amount,
-                COALESCE(SUM(CASE WHEN txn_type = 'assets' AND direction = 'debit' THEN amount ELSE 0 END), 0) AS assets_amount
+                COALESCE(SUM(CASE WHEN txn_type = 'assets' AND direction = 'debit' THEN amount ELSE 0 END), 0) AS assets_amount,
+                -- All debits for the month (for Overview "This Month" spending)
+                COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount ELSE 0 END), 0) AS total_debits_amount
             FROM enriched
             """,
             user_id,
@@ -317,13 +319,14 @@ class SpendSenseService:
         needs_amount = float(row["needs_amount"] or 0) if row else 0.0
         income_amount = float(row["income_amount"] or 0) if row else 0.0
         assets_amount = float(row["assets_amount"] or 0) if row else 0.0
-        
+        total_debits_amount = float(row["total_debits_amount"] or 0) if row else 0.0
+
         # Log calculated KPIs for debugging
         logger.info(
             f"[KPI CALC] Month {month}: income={income_amount}, needs={needs_amount}, "
             f"wants={wants_amount}, assets={assets_amount}, total_expenses={needs_amount + wants_amount}"
         )
-        
+
         wants_gauge = self._build_wants_gauge(needs=needs_amount, wants=wants_amount)
 
         best_month = await self._fetch_best_month_from_fact(
@@ -340,6 +343,7 @@ class SpendSenseService:
             needs_amount=needs_amount,
             wants_amount=wants_amount,
             assets_amount=assets_amount,
+            total_debits_amount=total_debits_amount,
             top_categories=top_categories,
             wants_gauge=wants_gauge,
             best_month=best_month,

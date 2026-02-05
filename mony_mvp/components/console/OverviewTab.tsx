@@ -11,7 +11,6 @@ import {
   generateAIInsights,
   hasNoTransactionData,
 } from '@/lib/api/console'
-import { fetchTransactions } from '@/lib/api/spendsense'
 import type { OverviewSummary } from '@/types/console'
 import { glassCardPrimary } from '@/lib/theme/glass'
 
@@ -28,31 +27,40 @@ export default function OverviewTab({ session }: OverviewTabProps) {
     setLoading(true)
     setError(null)
     try {
-      // First check if there are any transactions at all
-      const transactionsResponse = await fetchTransactions(session, { limit: 1 })
-      const hasTransactions = transactionsResponse.total > 0
+      // Phase 1: Load only KPIs + goals so we can paint the 4 cards quickly
+      const [kpis, goals] = await Promise.all([
+        fetchKPIs(session),
+        fetchGoals(session),
+      ])
 
-      if (!hasTransactions) {
-        // No transactions - show empty state
+      if (hasNoTransactionData(kpis)) {
         setSummary(null)
         setLoading(false)
         return
       }
 
-      const [kpis, goals, insights] = await Promise.all([
-        fetchKPIs(session),
-        fetchGoals(session),
-        fetchInsights(session),
-      ])
-
       const transformedGoals = transformGoals(goals)
-      
-      // Only generate insights if there's actual transaction data
-      const hasData = !hasNoTransactionData(kpis)
-      const aiInsights = hasData ? generateAIInsights(kpis, insights, transformedGoals) : []
-      const overview = transformToOverviewSummary(kpis, transformedGoals, aiInsights[0] || undefined)
-
+      const overview = transformToOverviewSummary(kpis, transformedGoals, undefined)
       setSummary(overview)
+      setLoading(false)
+      // Page paints here with the 4 cards; AI insight loads below
+
+      // Phase 2: Load insights in background and add AI insight when ready (no block on paint)
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      const insightsStart = startOfMonth.toISOString().slice(0, 10)
+      const insightsEnd = endOfMonth.toISOString().slice(0, 10)
+
+      fetchInsights(session, insightsStart, insightsEnd)
+        .then((insights) => {
+          const aiInsights = generateAIInsights(kpis, insights, transformedGoals)
+          const insight = aiInsights[0]
+          if (insight) {
+            setSummary((prev) => (prev ? { ...prev, latest_insight: insight } : null))
+          }
+        })
+        .catch((err) => console.error('Insights load failed (overview already shown):', err))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load overview')
       console.error('Error loading overview:', err)
@@ -107,6 +115,8 @@ export default function OverviewTab({ session }: OverviewTabProps) {
     )
   }
 
+  const monthName = new Date().toLocaleString('en-IN', { month: 'long' })
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <h2 className="text-xl font-bold text-white mb-4">Quick Overview</h2>
@@ -114,13 +124,13 @@ export default function OverviewTab({ session }: OverviewTabProps) {
       {/* Summary Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SummaryCard
-          title="Total Balance"
+          title={`Net (${monthName})`}
           value={formatCurrency(summary.total_balance)}
           color="green"
           icon="💰"
         />
         <SummaryCard
-          title="This Month"
+          title={`${monthName} Spending`}
           value={formatCurrency(summary.this_month_spending)}
           color="red"
           icon="📅"

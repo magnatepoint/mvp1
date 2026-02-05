@@ -34,11 +34,13 @@ struct MolyConsoleView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var viewModel: MolyConsoleViewModel
     @State private var selectedTab: MolyConsoleTab = .overview
-    
+    var isSelected: Bool
+
     private let goldColor = Color(red: 0.831, green: 0.686, blue: 0.216) // #D4AF37
     private let charcoalColor = Color(red: 0.18, green: 0.18, blue: 0.18) // #2E2E2E
     
-    init() {
+    init(isSelected: Bool = true) {
+        self.isSelected = isSelected
         let authService = AuthService()
         _viewModel = StateObject(wrappedValue: MolyConsoleViewModel(authService: authService))
     }
@@ -85,7 +87,8 @@ struct MolyConsoleView: View {
                 }
             }
         }
-        .task {
+        .task(id: isSelected) {
+            guard isSelected else { return }
             await loadInitialData()
         }
     }
@@ -188,7 +191,7 @@ struct MolyConsoleView: View {
 }
 
 #Preview {
-    MolyConsoleView()
+    MolyConsoleView(isSelected: true)
         .environmentObject(AuthManager())
 }
 

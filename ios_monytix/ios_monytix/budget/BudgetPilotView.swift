@@ -10,11 +10,13 @@ import SwiftUI
 struct BudgetPilotView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var viewModel: BudgetViewModel
-    
+    var isSelected: Bool
+
     private let goldColor = Color(red: 0.831, green: 0.686, blue: 0.216)
     private let charcoalColor = Color(red: 0.18, green: 0.18, blue: 0.18)
-    
-    init() {
+
+    init(isSelected: Bool = true) {
+        self.isSelected = isSelected
         let authService = AuthService()
         _viewModel = StateObject(wrappedValue: BudgetViewModel(authService: authService))
     }
@@ -113,14 +115,17 @@ struct BudgetPilotView: View {
                 }
             }
         }
-        .task {
+        .task(id: isSelected) {
+            guard isSelected else { return }
             await loadInitialData()
         }
     }
-    
+
     private func loadInitialData() async {
-        await viewModel.loadRecommendations()
-        await viewModel.loadCommittedBudget()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await viewModel.loadRecommendations() }
+            group.addTask { await viewModel.loadCommittedBudget() }
+        }
     }
     
     private func errorState(_ error: String) -> some View {
@@ -171,7 +176,7 @@ struct BudgetPilotView: View {
 }
 
 #Preview {
-    BudgetPilotView()
+    BudgetPilotView(isSelected: true)
         .environmentObject(AuthManager())
 }
 

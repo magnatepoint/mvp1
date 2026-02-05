@@ -14,6 +14,10 @@ class MolyConsoleViewModel: ObservableObject {
     private let spendSenseService: SpendSenseService
     private let authService: AuthService
     
+    // Shared data cache to avoid duplicate API calls
+    private var cachedKPIs: SpendSenseKPIs?
+    private var cachedInsights: Insights?
+    
     // Overview
     @Published var overviewSummary: OverviewSummary?
     @Published var isOverviewLoading = false
@@ -53,27 +57,14 @@ class MolyConsoleViewModel: ObservableObject {
         defer { isOverviewLoading = false }
         
         do {
-            // Aggregate data from multiple sources
             let kpis = try await spendSenseService.getKPIs()
             _ = try await spendSenseService.getInsights()
-            
-            // Calculate total balance (from assets)
             let totalBalance = kpis.assetsAmount ?? 0
-            
-            // Calculate this month's spending
             let thisMonthSpending = (kpis.needsAmount ?? 0) + (kpis.wantsAmount ?? 0)
-            
-            // Calculate savings rate
             let savingsRate = kpis.calculateSavingsRate()
-            
-            // Get active goals count
-            await loadGoals()
+            // Use already-loaded goals/insights from parallel tasks (no duplicate fetch)
             let activeGoalsCount = goals.filter { $0.isActive }.count
-            
-            // Get latest AI insight
-            await loadAIInsights()
             let latestInsight = aiInsights.first
-            
             overviewSummary = OverviewSummary(
                 totalBalance: totalBalance,
                 thisMonthSpending: thisMonthSpending,
@@ -97,7 +88,7 @@ class MolyConsoleViewModel: ObservableObject {
         do {
             // For now, create mock accounts based on KPIs
             // In production, this would come from a dedicated accounts API
-            let kpis = try await spendSenseService.getKPIs()
+            let kpis = try await loadKPIsIfNeeded()
             
             // Mock accounts - in production, fetch from accounts API
             var mockAccounts: [Account] = []
@@ -181,7 +172,7 @@ class MolyConsoleViewModel: ObservableObject {
         defer { isSpendingLoading = false }
         
         do {
-            let insights = try await spendSenseService.getInsights()
+            let insights = try await loadInsightsIfNeeded()
             
             // Calculate monthly spending from category breakdown
             if let categoryBreakdown = insights.categoryBreakdown {
@@ -197,7 +188,7 @@ class MolyConsoleViewModel: ObservableObject {
                 }
             } else {
                 // Fallback: use KPIs
-                let kpis = try await spendSenseService.getKPIs()
+                let kpis = try await loadKPIsIfNeeded()
                 monthlySpending = (kpis.needsAmount ?? 0) + (kpis.wantsAmount ?? 0)
                 spendingByCategory = []
             }
@@ -254,8 +245,12 @@ class MolyConsoleViewModel: ObservableObject {
         var mockInsights: [AIInsight] = []
         
         do {
-            let kpis = try await spendSenseService.getKPIs()
-            let insights = try await spendSenseService.getInsights()
+            // Load KPIs and Insights in parallel, reuse cached if available
+            async let kpisTask = loadKPIsIfNeeded()
+            async let insightsTask = loadInsightsIfNeeded()
+            
+            let kpis = try await kpisTask
+            let insights = try await insightsTask
             
             // Create spending alert if needed
             if let topCategories = kpis.topCategories, !topCategories.isEmpty {
@@ -274,8 +269,7 @@ class MolyConsoleViewModel: ObservableObject {
                 }
             }
             
-            // Create goal progress insight
-            await loadGoals()
+            // Use already-loaded goals from parallel task (no duplicate fetch)
             if let goal = goals.first, goal.progress > 0.8 {
                 mockInsights.append(AIInsight(
                     id: UUID(),

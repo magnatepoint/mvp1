@@ -73,6 +73,8 @@ export interface SpendSenseKPI {
   needs_amount: number
   wants_amount: number
   assets_amount: number
+  /** All debits for the month (for "This Month" spending). Backend may omit; fallback to needs+wants. */
+  total_debits_amount?: number
   top_categories: CategorySpendKPI[]
   wants_gauge?: WantsGauge | null
   best_month?: BestMonthSnapshot | null

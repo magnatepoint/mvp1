@@ -41,10 +41,22 @@ export default function GoalsTab({ session }: GoalsTabProps) {
     }).format(amount)
   }
 
-  if (loading) {
+  if (loading && goals.length === 0 && !error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#D4AF37]"></div>
+      <div className="max-w-7xl mx-auto space-y-4">
+        <h2 className="text-xl font-bold text-white mb-4">Goals</h2>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className={`${glassCardPrimary} p-6 animate-pulse`}>
+              <div className="flex justify-between items-start mb-3">
+                <div className="h-5 bg-white/10 rounded w-1/3" />
+                <div className="h-5 bg-white/10 rounded w-20" />
+              </div>
+              <div className="h-2 bg-white/10 rounded w-full" />
+              <div className="h-4 bg-white/10 rounded w-1/4 mt-3" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

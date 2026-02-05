@@ -25,11 +25,13 @@ struct MoneyMomentsView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var viewModel: MoneyMomentsViewModel
     @State private var selectedTab: MoneyMomentsTab = .nudges
-    
-    private let goldColor = Color(red: 0.831, green: 0.686, blue: 0.216) // #D4AF37
-    private let charcoalColor = Color(red: 0.18, green: 0.18, blue: 0.18) // #2E2E2E
-    
-    init() {
+    var isSelected: Bool
+
+    private let goldColor = Color(red: 0.831, green: 0.686, blue: 0.216)
+    private let charcoalColor = Color(red: 0.18, green: 0.18, blue: 0.18)
+
+    init(isSelected: Bool = true) {
+        self.isSelected = isSelected
         let authService = AuthService()
         _viewModel = StateObject(wrappedValue: MoneyMomentsViewModel(authService: authService))
     }
@@ -75,7 +77,8 @@ struct MoneyMomentsView: View {
                     }
                 }
             }
-            .task {
+            .task(id: isSelected) {
+                guard isSelected else { return }
                 await viewModel.loadAll()
             }
         }
@@ -138,6 +141,6 @@ struct MoneyMomentsView: View {
 }
 
 #Preview {
-    MoneyMomentsView()
+    MoneyMomentsView(isSelected: true)
         .environmentObject(AuthManager())
 }

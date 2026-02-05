@@ -20,18 +20,16 @@ export default function AccountsTab({ session }: AccountsTabProps) {
     setLoading(true)
     setError(null)
     try {
-      // First check if there are any transactions at all
-      const transactionsResponse = await fetchTransactions(session, { limit: 1 })
+      const [transactionsResponse, kpis] = await Promise.all([
+        fetchTransactions(session, { limit: 1 }),
+        fetchKPIs(session),
+      ])
       const hasTransactions = transactionsResponse.total > 0
-
-      if (!hasTransactions) {
-        // No transactions - show empty state
+      if (!hasTransactions || !kpis.month) {
         setAccounts([])
         setLoading(false)
         return
       }
-
-      const kpis = await fetchKPIs(session)
       const mockAccounts = generateMockAccounts(kpis)
       setAccounts(mockAccounts)
     } catch (err) {
@@ -74,10 +72,18 @@ export default function AccountsTab({ session }: AccountsTabProps) {
     return colors[type] || 'text-gray-400'
   }
 
-  if (loading) {
+  if (loading && accounts.length === 0 && !error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#D4AF37]"></div>
+      <div className="max-w-7xl mx-auto space-y-4">
+        <h2 className="text-xl font-bold text-white mb-4">Accounts</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className={`${glassCardPrimary} p-4 animate-pulse`}>
+              <div className="h-5 bg-white/10 rounded w-1/3 mb-3" />
+              <div className="h-8 bg-white/10 rounded w-1/2" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-import redis.asyncio as aioredis
+import redis.asyncio as aioredis  # type: ignore[reportMissingImports]
 
 from app.core.config import get_settings
 from app.services.realtime_ws import send_to_user

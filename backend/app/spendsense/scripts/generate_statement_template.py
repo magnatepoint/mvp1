@@ -16,7 +16,7 @@ backend_path = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(backend_path))
 
 import pandas as pd  # type: ignore[import-untyped]
-import asyncpg
+import asyncpg  # type: ignore[reportMissingImports]
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 from openpyxl.worksheet.datavalidation import DataValidation  # type: ignore[import-untyped]
 
@@ -120,7 +120,7 @@ def main() -> None:
     df = pd.DataFrame(SAMPLE_ROWS, columns=HEADERS)
 
     # Create workbook with openpyxl directly to have better control
-    from openpyxl import Workbook
+    from openpyxl import Workbook  # type: ignore[reportMissingModuleSource]
     wb = Workbook()
     wb.remove(wb.active)  # Remove default sheet
     

@@ -38,18 +38,22 @@ class AuthManager: ObservableObject {
     }
     
     private func initialize() {
-        // Check for existing session
+        // Set up auth state listener first (non-blocking)
+        authStateTask = Task {
+            for await event in authService.authStateChanges {
+                await handleAuthStateChange(event)
+            }
+        }
+        
+        // Check for existing session - don't block UI, load in background
         Task {
-            user = await authService.getCurrentUser()
-            session = await authService.getCurrentSession()
+            // Set loading to false quickly so UI can render
+            // Auth will update via authStateChanges listener
             isLoading = false
             
-            // Listen to auth state changes
-            authStateTask = Task {
-                for await event in authService.authStateChanges {
-                    await handleAuthStateChange(event)
-                }
-            }
+            // Load session in background
+            user = await authService.getCurrentUser()
+            session = await authService.getCurrentSession()
             
             // Listen for unauthorized errors (401) to trigger auto-logout
             NotificationCenter.default.addObserver(forName: .authUnauthorized, object: nil, queue: .main) { [weak self] _ in

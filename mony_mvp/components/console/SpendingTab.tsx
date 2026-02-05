@@ -20,7 +20,13 @@ export default function SpendingTab({ session }: SpendingTabProps) {
     setLoading(true)
     setError(null)
     try {
-      const insights = await fetchInsights(session)
+      // Use current month so "This Month's Spending" matches KPI period
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      const startDate = startOfMonth.toISOString().slice(0, 10) // YYYY-MM-DD
+      const endDate = endOfMonth.toISOString().slice(0, 10)
+      const insights = await fetchInsights(session, startDate, endDate)
       if (insights.category_breakdown && insights.category_breakdown.length > 0) {
         const total = insights.category_breakdown.reduce((sum, cat) => sum + cat.amount, 0)
         setMonthlySpending(total)
@@ -49,10 +55,25 @@ export default function SpendingTab({ session }: SpendingTabProps) {
     }).format(amount)
   }
 
-  if (loading) {
+  if (loading && spendingByCategory.length === 0 && !error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#D4AF37]"></div>
+      <div className="max-w-7xl mx-auto space-y-6">
+        <h2 className="text-xl font-bold text-white mb-4">Spending</h2>
+        <div className={`${glassCardSecondary} p-6 animate-pulse`}>
+          <div className="h-5 bg-white/10 rounded w-1/4 mb-4" />
+          <div className="h-10 bg-white/10 rounded w-1/3" />
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className={`${glassCardSecondary} p-4 animate-pulse`}>
+              <div className="flex justify-between">
+                <div className="h-4 bg-white/10 rounded w-1/4" />
+                <div className="h-4 bg-white/10 rounded w-1/6" />
+              </div>
+              <div className="h-2 bg-white/10 rounded mt-2 w-full" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

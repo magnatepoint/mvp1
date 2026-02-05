@@ -18,8 +18,10 @@ struct SpendSenseView: View {
     @StateObject private var viewModel: SpendSenseViewModel
     @State private var selectedTab: SpendSenseTab = .categories
     @State private var showFilterSheet = false
-    
-    init() {
+    var isSelected: Bool
+
+    init(isSelected: Bool = true) {
+        self.isSelected = isSelected
         let authService = AuthService()
         _viewModel = StateObject(wrappedValue: SpendSenseViewModel(authService: authService))
     }
@@ -81,11 +83,12 @@ struct SpendSenseView: View {
                 FilterSheet(viewModel: viewModel)
             }
         }
-        .task {
+        .task(id: isSelected) {
+            guard isSelected else { return }
             await loadInitialData()
         }
     }
-    
+
     private var filterBar: some View {
         HStack(spacing: 12) {
             // Search Field
@@ -228,7 +231,7 @@ struct FilterSheet: View {
 }
 
 #Preview {
-    SpendSenseView()
+    SpendSenseView(isSelected: true)
         .environmentObject(AuthManager())
 }
 

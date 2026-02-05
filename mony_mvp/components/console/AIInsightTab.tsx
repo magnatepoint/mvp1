@@ -19,23 +19,24 @@ export default function AIInsightTab({ session }: AIInsightTabProps) {
     setLoading(true)
     setError(null)
     try {
-      // First check if there are any transactions at all
-      const transactionsResponse = await fetchTransactions(session, { limit: 1 })
-      const hasTransactions = transactionsResponse.total > 0
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      const startDate = startOfMonth.toISOString().slice(0, 10)
+      const endDate = endOfMonth.toISOString().slice(0, 10)
 
-      if (!hasTransactions) {
-        // No transactions - show empty state
+      const [transactionsResponse, kpis, insightsData, goalsData] = await Promise.all([
+        fetchTransactions(session, { limit: 1 }),
+        fetchKPIs(session),
+        fetchInsights(session, startDate, endDate),
+        fetchGoals(session),
+      ])
+      const hasTransactions = transactionsResponse.total > 0
+      if (!hasTransactions || !kpis.month) {
         setInsights([])
         setLoading(false)
         return
       }
-
-      const [kpis, insightsData, goalsData] = await Promise.all([
-        fetchKPIs(session),
-        fetchInsights(session),
-        fetchGoals(session),
-      ])
-
       const goals = transformGoals(goalsData)
       const aiInsights = generateAIInsights(kpis, insightsData, goals)
       setInsights(aiInsights)
@@ -82,10 +83,22 @@ export default function AIInsightTab({ session }: AIInsightTabProps) {
     return badges[priority] || badges.low
   }
 
-  if (loading) {
+  if (loading && insights.length === 0 && !error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#D4AF37]"></div>
+      <div className="max-w-7xl mx-auto space-y-4">
+        <h2 className="text-xl font-bold text-white mb-4">AI Insights</h2>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl bg-white/5 border border-white/10 p-4 animate-pulse">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-5 w-5 bg-white/10 rounded" />
+                <div className="h-4 bg-white/10 rounded w-1/4" />
+              </div>
+              <div className="h-3 bg-white/10 rounded w-full" />
+              <div className="h-3 bg-white/10 rounded w-3/4 mt-2" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

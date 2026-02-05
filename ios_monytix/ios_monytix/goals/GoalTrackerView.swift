@@ -31,11 +31,13 @@ struct GoalTrackerView: View {
     @State private var showStepper = false
     @State private var hasGoals = false
     @State private var isLoading = true
-    
+    var isSelected: Bool
+
     private let goldColor = Color(red: 0.831, green: 0.686, blue: 0.216)
     private let charcoalColor = Color(red: 0.18, green: 0.18, blue: 0.18)
-    
-    init() {
+
+    init(isSelected: Bool = true) {
+        self.isSelected = isSelected
         let authService = AuthService()
         _viewModel = StateObject(wrappedValue: GoalsViewModel(authService: authService))
     }
@@ -79,11 +81,12 @@ struct GoalTrackerView: View {
                 }
             }
         }
-        .task {
+        .task(id: isSelected) {
+            guard isSelected else { return }
             await checkUserGoals()
         }
     }
-    
+
     private var customTabBar: some View {
         HStack(spacing: 0) {
             ForEach(GoalTrackerTab.allCases, id: \.self) { tab in
@@ -184,14 +187,16 @@ struct GoalTrackerView: View {
     }
     
     private func refreshData() async {
-        await viewModel.loadGoals()
-        await viewModel.loadProgress()
-        await viewModel.loadAIInsights()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await viewModel.loadGoals() }
+            group.addTask { await viewModel.loadProgress() }
+            group.addTask { await viewModel.loadAIInsights() }
+        }
     }
 }
 
 #Preview {
-    GoalTrackerView()
+    GoalTrackerView(isSelected: true)
         .environmentObject(AuthManager())
 }
 
